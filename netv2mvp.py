@@ -408,7 +408,8 @@ class VideoSoC(BaseSoC):
         self.submodules.hdmi_in0 = HDMIIn(hdmi_in0_pads,
                                          self.sdram.crossbar.get_port(mode="write"),
                                          fifo_depth=512,
-                                         device="xc7")
+                                         device="xc7",
+                                         clk_polarity=1, datas_polarity=[1, 1, 1])
         self.comb += self.hdmi_in0_freq.clk.eq(self.hdmi_in0.clocking.cd_pix.clk)
         self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix.clk, period_ns(1*pix_freq))
         self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix1p25x.clk, period_ns(1.25*pix_freq))
