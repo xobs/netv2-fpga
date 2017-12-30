@@ -1,5 +1,7 @@
-- Add DMA Writer/Reader to/from DDR3.
-- Test Host Memory <--> DDR3 Memory DMAs.
+- create NeTV2MVP target (with pinout from bunnie)
+- Add second HDMI in/out ports to NeTV2MVP.
+- Use PCIeX4 on NeTV2MVP.
+- Add DMA Writer/Reader to/from DDR3
+- Test Host Memory <--> DDR3 DMAs
 - Test Host Memory --> DDR3 --> VideoOut
-- Implement HDMI In
 - Test VideoIn --> DDR3 --> Host Memory
