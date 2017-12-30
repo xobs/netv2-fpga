@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse
+import sys
 import os
 
 from litex.gen import *
@@ -241,6 +241,7 @@ class BaseSoC(SoCSDRAM):
             integrated_rom_size=0x8000,
             integrated_sram_size=0x8000,
             ident="NeTV2 LiteX Base SoC",
+            reserve_nmi_interrupt=False,
             **kwargs)
 
         self.submodules.crg = CRG(platform)
@@ -388,19 +389,22 @@ class VideoSoC(BaseSoC):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="NeTV2 LiteX Base SoC")
-    builder_args(parser)
-    soc_sdram_args(parser)
-    args = parser.parse_args()
-
     platform = Platform()
-    soc = BaseSoC(platform, **soc_sdram_argdict(args))
+    if len(sys.argv) < 2:
+        print("missing target (base or pcie or video)")
+        exit()
+    if sys.argv[1] == "base":
+        soc = BaseSoC(platform)
+    elif sys.argv[1] == "pcie":
+        soc = PCIeSoC(platform)
+    elif sys.argv[1] == "video":
+        soc = VideoSoC(platform)
     builder = Builder(soc, output_dir="build")
     vns = builder.build()
 
-    # for pcie
-    #csr_header = cpu_interface.get_csr_header(soc.get_csr_regions(), soc.get_constants())
-    #write_to_file(os.path.join("software", "pcie", "kernel", "csr.h"), csr_header)
+    if sys.argv[1] == "pcie":
+        csr_header = cpu_interface.get_csr_header(soc.get_csr_regions(), soc.get_constants())
+        write_to_file(os.path.join("software", "pcie", "kernel", "csr.h"), csr_header)
 
 if __name__ == "__main__":
     main()
