@@ -12,10 +12,19 @@ from litex.soc.integration.soc_core import mem_decoder
 from litex.soc.integration.soc_sdram import *
 from litex.soc.integration.builder import *
 from litex.soc.cores import dna, xadc
+from litex.soc.cores.frequency_meter import FrequencyMeter
 
 from litedram.modules import MT41J128M16
 from litedram.phy import a7ddrphy
 from litedram.core import ControllerSettings
+
+from litepcie.phy.s7pciephy import S7PCIEPHY
+from litepcie.core import LitePCIeEndpoint, LitePCIeMSI
+from litepcie.frontend.dma import LitePCIeDMA
+from litepcie.frontend.wishbone import LitePCIeWishboneBridge
+
+from litevideo.input import HDMIIn
+from litevideo.output import VideoOut
 
 import cpu_interface
 
@@ -92,6 +101,69 @@ _io = [
         Subsignal("tx_p", Pins("D5 B6 D7 B4")),
         Subsignal("tx_n", Pins("C5 A6 C7 A4"))
     ),
+
+    ("hdmi_in", 0,
+        Subsignal("clk_p", Pins("L19"), IOStandard("TMDS_33")),    # inverted
+        Subsignal("clk_n", Pins("L20"), IOStandard("TMDS_33")),
+        Subsignal("data0_p", Pins("K21"), IOStandard("TMDS_33")),  # inverted (swapped with 0)
+        Subsignal("data0_n", Pins("K22"), IOStandard("TMDS_33")),
+        Subsignal("data1_p", Pins("J20"), IOStandard("TMDS_33")),  # inverted
+        Subsignal("data1_n", Pins("J21"), IOStandard("TMDS_33")),
+        Subsignal("data2_p", Pins("J22"), IOStandard("TMDS_33")),  # inverted (swapped with 2)
+        Subsignal("data2_n", Pins("H22"), IOStandard("TMDS_33")),
+        Subsignal("scl", Pins("T18"), IOStandard("LVCMOS33")),
+        Subsignal("sda", Pins("V18"), IOStandard("LVCMOS33")),
+    ),
+
+    ("hdmi_in", 1,
+        Subsignal("clk_p", Pins("Y18"), IOStandard("TMDS_33")),    # inverted
+        Subsignal("clk_n", Pins("Y19"), IOStandard("TMDS_33")),
+        Subsignal("data0_p", Pins("AA18"), IOStandard("TMDS_33")), # non-inverted
+        Subsignal("data0_n", Pins("AB18"), IOStandard("TMDS_33")),
+        Subsignal("data1_p", Pins("AA19"), IOStandard("TMDS_33")), # inverted
+        Subsignal("data1_n", Pins("AB20"), IOStandard("TMDS_33")),
+        Subsignal("data2_p", Pins("AB21"), IOStandard("TMDS_33")), # inverted
+        Subsignal("data2_n", Pins("AB22"), IOStandard("TMDS_33")),
+        Subsignal("scl", Pins("W17"), IOStandard("LVCMOS33")),
+        Subsignal("sda", Pins("R17"), IOStandard("LVCMOS33")),
+    ),
+
+    ("hdmi_out", 0,
+        Subsignal("clk_p", Pins("W19"), IOStandard("TMDS_33")),   # inverted
+        Subsignal("clk_n", Pins("W20"), IOStandard("TMDS_33")),
+        Subsignal("data0_p", Pins("W21"), IOStandard("TMDS_33")), # non-inverted
+        Subsignal("data0_n", Pins("W22"), IOStandard("TMDS_33")),
+        Subsignal("data1_p", Pins("U20"), IOStandard("TMDS_33")), # non-inverted
+        Subsignal("data1_n", Pins("V20"), IOStandard("TMDS_33")),
+        Subsignal("data2_p", Pins("T21"), IOStandard("TMDS_33")), # non-inverted
+        Subsignal("data2_n", Pins("U21"), IOStandard("TMDS_33"))
+    ),
+
+    ("hdmi_out", 1,
+        Subsignal("clk_p", Pins("G21"), IOStandard("TMDS_33")),
+        Subsignal("clk_n", Pins("G22"), IOStandard("TMDS_33")),
+        Subsignal("data0_p", Pins("E22"), IOStandard("TMDS_33")),
+        Subsignal("data0_n", Pins("D22"), IOStandard("TMDS_33")),
+        Subsignal("data1_p", Pins("C22"), IOStandard("TMDS_33")),
+        Subsignal("data1_n", Pins("B22"), IOStandard("TMDS_33")),
+        Subsignal("data2_p", Pins("B21"), IOStandard("TMDS_33")),
+        Subsignal("data2_n", Pins("A21"), IOStandard("TMDS_33")),
+    ),
+
+    ("hdmi_sda_over_up", 0, Pins("G20"), IOStandard("LVCMOS33")),
+    ("hdmi_sda_over_dn", 0, Pins("F20"), IOStandard("LVCMOS33")), # must be mutex with the above
+
+    ("hdmi_rx0_forceunplug", 0, Pins("M22"), IOStandard("LVCMOS33")), # forces an HPD on the RX0/TX0 path
+    ("hdmi_rx0_forceplug", 0, Pins("N22"), IOStandard("LVCMOS33")),   # this needs to be mutex with the above
+
+    ("hdmi_tx1_hpd_n", 0, Pins("U18"), IOStandard("LVCMOS33")),  # this is the internal hdmi-D port
+
+    ("hdmi_tx1_cec", 0, Pins("P17"), IOStandard("LVCMOS33")),  # tx1/rx1 path
+    ("hdmi_tx0_cec", 0, Pins("P20"), IOStandard("LVCMOS33")),  # tx0/rx0 path
+
+    ("hdmi_ov0_cec", 0, Pins("P19"), IOStandard("LVCMOS33")),  # dedicated to the overlay input
+    ("hdmi_ov0_hpd_n", 0, Pins("V17"), IOStandard("LVCMOS33")), # if the overlay input is plugged in
+
 ]
 
 
@@ -309,6 +381,69 @@ class PCIeSoC(BaseSoC):
         self.comb += self.pcie_led.eq(pcie_counter[26])
 
 
+class VideoSoC(BaseSoC):
+    csr_peripherals = {
+        "hdmi_out0",
+        "hdmi_in0",
+        "hdmi_in0_freq",
+        "hdmi_in0_edid_mem"
+    }
+    csr_map_update(BaseSoC.csr_map, csr_peripherals)
+
+    interrupt_map = {
+        "hdmi_in0": 3,
+    }
+    interrupt_map.update(BaseSoC.interrupt_map)
+
+    def __init__(self, platform, *args, **kwargs):
+        BaseSoC.__init__(self, platform, *args, **kwargs)
+
+        # # #
+
+        pix_freq = 148.50e6
+
+        # hdmi in
+        hdmi_in0_pads = platform.request("hdmi_in")
+        self.submodules.hdmi_in0_freq = FrequencyMeter(period=self.clk_freq)
+        self.submodules.hdmi_in0 = HDMIIn(hdmi_in0_pads,
+                                         self.sdram.crossbar.get_port(mode="write"),
+                                         fifo_depth=512,
+                                         device="xc7")
+        self.comb += self.hdmi_in0_freq.clk.eq(self.hdmi_in0.clocking.cd_pix.clk)
+        self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix.clk, period_ns(1*pix_freq))
+        self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix1p25x.clk, period_ns(1.25*pix_freq))
+        self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix5x.clk, period_ns(5*pix_freq))
+
+        self.platform.add_false_path_constraints(
+            self.crg.cd_sys.clk,
+            self.hdmi_in0.clocking.cd_pix.clk,
+            self.hdmi_in0.clocking.cd_pix1p25x.clk,
+            self.hdmi_in0.clocking.cd_pix5x.clk)
+
+        # hdmi out
+        hdmi_out0_dram_port = self.sdram.crossbar.get_port(mode="read", dw=16, cd="hdmi_out0_pix", reverse=True)
+        self.submodules.hdmi_out0 = VideoOut(platform.device,
+                                            platform.request("hdmi_out"),
+                                            hdmi_out0_dram_port,
+                                            "ycbcr422",
+                                            fifo_depth=4096)
+
+        self.platform.add_period_constraint(self.hdmi_out0.driver.clocking.cd_pix.clk, period_ns(1*pix_freq))
+        self.platform.add_period_constraint(self.hdmi_out0.driver.clocking.cd_pix5x.clk, period_ns(5*pix_freq))
+
+        self.platform.add_false_path_constraints(
+            self.crg.cd_sys.clk,
+            self.hdmi_out0.driver.clocking.cd_pix.clk,
+            self.hdmi_out0.driver.clocking.cd_pix5x.clk)
+
+        # hdmi over
+        self.comb += [
+            platform.request("hdmi_sda_over_up").eq(0),
+            platform.request("hdmi_sda_over_dn").eq(0),
+            platform.request("hdmi_hdp_over").eq(0),
+        ]
+
+
 def main():
     platform = Platform()
     if len(sys.argv) < 2:
@@ -318,6 +453,8 @@ def main():
         soc = BaseSoC(platform)
     elif sys.argv[1] == "pcie":
         soc = PCIeSoC(platform)
+    elif sys.argv[1] == "video":
+        soc = VideoSoC(platform)
     builder = Builder(soc, output_dir="build")
     vns = builder.build()
 
