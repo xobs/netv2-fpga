@@ -343,7 +343,7 @@ class PCIeSoC(BaseSoC):
         BaseSoC.__init__(self, platform, csr_data_width=32, **kwargs)
 
         # pcie phy
-        self.submodules.pcie_phy = S7PCIEPHY(platform, platform.request("pcie_x1"))
+        self.submodules.pcie_phy = S7PCIEPHY(platform, platform.request("pcie_x2"))
         self.platform.add_false_path_constraints(
             self.crg.cd_sys.clk,
             self.pcie_phy.cd_pcie.clk)
