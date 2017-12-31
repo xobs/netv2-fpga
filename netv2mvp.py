@@ -331,11 +331,10 @@ class PCIeSoC(BaseSoC):
     }
     csr_map.update(BaseSoC.csr_map)
 
-    interrupt_map = {
+    pcie_interrupt_map = {
         "dma_writer": 0,
         "dma_reader": 1,
     }
-    interrupt_map.update(BaseSoC.interrupt_map)
 
     BaseSoC.mem_map["csr"] = 0x00000000
     BaseSoC.mem_map["rom"] = 0x20000000
@@ -368,7 +367,7 @@ class PCIeSoC(BaseSoC):
             "dma_reader":    self.dma.reader.irq
         }
         for k, v in sorted(self.interrupts.items()):
-            self.comb += self.msi.irqs[self.interrupt_map[k]].eq(v)
+            self.comb += self.msi.irqs[self.pcie_interrupt_map[k]].eq(v)
 
         # pcie led
         pcie_counter = Signal(32)
