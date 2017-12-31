@@ -168,9 +168,6 @@ _io = [
 
 
 class Platform(XilinxPlatform):
-    default_clk_name = "clk50"
-    default_clk_period = 20.0
-
     def __init__(self, toolchain="vivado", programmer="vivado"):
         XilinxPlatform.__init__(self, "xc7a35t-fgg484-2", _io,
                                 toolchain=toolchain)
@@ -227,9 +224,7 @@ class CRG(Module):
         self.clock_domains.cd_clk100 = ClockDomain()
 
         clk50 = platform.request("clk50")
-        clk50.attr.add("keep")
-        platform.add_period_constraint(clk50, period_ns(50e6))
-        self.rst = Signal()
+        rst = Signal()
 
         pll_locked = Signal()
         pll_fb = Signal()
@@ -267,9 +262,9 @@ class CRG(Module):
             Instance("BUFG", i_I=pll_clk200, o_O=self.cd_clk200.clk),
             Instance("BUFG", i_I=pll_sys4x, o_O=self.cd_sys4x.clk),
             Instance("BUFG", i_I=pll_sys4x_dqs, o_O=self.cd_sys4x_dqs.clk),
-            AsyncResetSynchronizer(self.cd_sys, ~pll_locked | self.rst),
-            AsyncResetSynchronizer(self.cd_clk200, ~pll_locked | 1), # FIXME
-            AsyncResetSynchronizer(self.cd_clk100, ~pll_locked | self.rst)
+            AsyncResetSynchronizer(self.cd_sys, ~pll_locked | rst),
+            AsyncResetSynchronizer(self.cd_clk200, ~pll_locked | rst),
+            AsyncResetSynchronizer(self.cd_clk100, ~pll_locked | rst)
         ]
 
         reset_counter = Signal(4, reset=15)
@@ -448,7 +443,7 @@ class VideoSoC(BaseSoC):
 def main():
     platform = Platform()
     if len(sys.argv) < 2:
-        print("missing target (base or pcie)")
+        print("missing target (base or pcie or video)")
         exit()
     if sys.argv[1] == "base":
         soc = BaseSoC(platform)
@@ -458,6 +453,10 @@ def main():
         soc = VideoSoC(platform)
     builder = Builder(soc, output_dir="build")
     vns = builder.build()
+
+    if sys.argv[1] == "pcie":
+        csr_header = cpu_interface.get_csr_header(soc.get_csr_regions(), soc.get_constants())
+        write_to_file(os.path.join("software", "pcie", "kernel", "csr.h"), csr_header)
 
 if __name__ == "__main__":
     main()

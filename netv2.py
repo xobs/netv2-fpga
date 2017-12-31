@@ -101,7 +101,6 @@ _io = [
         Subsignal("data1_n", Pins("U5"), IOStandard("TMDS_33")),
         Subsignal("data2_p", Pins("V7"), IOStandard("TMDS_33")),
         Subsignal("data2_n", Pins("V6"), IOStandard("TMDS_33")),
-        IOStandard("TMDS_33")
     ),
 
     ("hdmi_sda_over_up", 0, Pins("V7"), IOStandard("LVCMOS33")),
@@ -112,9 +111,6 @@ _io = [
 
 
 class Platform(XilinxPlatform):
-    default_clk_name = "clk100"
-    default_clk_period = 20.0
-
     def __init__(self, toolchain="vivado", programmer="vivado"):
         XilinxPlatform.__init__(self, "xc7a50t-csg325-2", _io,
                                 toolchain=toolchain)
@@ -171,9 +167,7 @@ class CRG(Module):
         self.clock_domains.cd_clk100 = ClockDomain()
 
         clk50 = platform.request("clk50")
-        clk50.attr.add("keep")
-        platform.add_period_constraint(clk50, period_ns(50e6))
-        self.rst = Signal()
+        rst = Signal()
 
         pll_locked = Signal()
         pll_fb = Signal()
@@ -211,9 +205,9 @@ class CRG(Module):
             Instance("BUFG", i_I=pll_clk200, o_O=self.cd_clk200.clk),
             Instance("BUFG", i_I=pll_sys4x, o_O=self.cd_sys4x.clk),
             Instance("BUFG", i_I=pll_sys4x_dqs, o_O=self.cd_sys4x_dqs.clk),
-            AsyncResetSynchronizer(self.cd_sys, ~pll_locked | self.rst),
-            AsyncResetSynchronizer(self.cd_clk200, ~pll_locked | 1), # FIXME
-            AsyncResetSynchronizer(self.cd_clk100, ~pll_locked | self.rst)
+            AsyncResetSynchronizer(self.cd_sys, ~pll_locked | rst),
+            AsyncResetSynchronizer(self.cd_clk200, ~pll_locked | rst),
+            AsyncResetSynchronizer(self.cd_clk100, ~pll_locked | rst)
         ]
 
         reset_counter = Signal(4, reset=15)
