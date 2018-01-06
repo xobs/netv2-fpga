@@ -103,27 +103,27 @@ _io = [
     ),
 
     ("hdmi_in", 0,
-        Subsignal("clk_p", Pins("L19"), IOStandard("TMDS_33")),    # inverted
-        Subsignal("clk_n", Pins("L20"), IOStandard("TMDS_33")),
-        Subsignal("data0_p", Pins("K21"), IOStandard("TMDS_33")),  # inverted (swapped with 0)
-        Subsignal("data0_n", Pins("K22"), IOStandard("TMDS_33")),
-        Subsignal("data1_p", Pins("J20"), IOStandard("TMDS_33")),  # inverted
-        Subsignal("data1_n", Pins("J21"), IOStandard("TMDS_33")),
-        Subsignal("data2_p", Pins("J22"), IOStandard("TMDS_33")),  # inverted (swapped with 2)
-        Subsignal("data2_n", Pins("H22"), IOStandard("TMDS_33")),
+        Subsignal("clk_p", Pins("L19"), Inverted(), IOStandard("TMDS_33")),    # inverted
+        Subsignal("clk_n", Pins("L20"), Inverted(), IOStandard("TMDS_33")),
+        Subsignal("data0_p", Pins("K21"), Inverted(), IOStandard("TMDS_33")),  # inverted (swapped with 0)
+        Subsignal("data0_n", Pins("K22"), Inverted(), IOStandard("TMDS_33")),
+        Subsignal("data1_p", Pins("J20"), Inverted(), IOStandard("TMDS_33")),  # inverted
+        Subsignal("data1_n", Pins("J21"), Inverted(), IOStandard("TMDS_33")),
+        Subsignal("data2_p", Pins("J22"), Inverted(), IOStandard("TMDS_33")),  # inverted (swapped with 2)
+        Subsignal("data2_n", Pins("H22"), Inverted(), IOStandard("TMDS_33")),
         Subsignal("scl", Pins("T18"), IOStandard("LVCMOS33")),
         Subsignal("sda", Pins("V18"), IOStandard("LVCMOS33")),
     ),
 
     ("hdmi_in", 1,
-        Subsignal("clk_p", Pins("Y18"), IOStandard("TMDS_33")),    # inverted
-        Subsignal("clk_n", Pins("Y19"), IOStandard("TMDS_33")),
+        Subsignal("clk_p", Pins("Y18"), Inverted(), IOStandard("TMDS_33")),    # inverted
+        Subsignal("clk_n", Pins("Y19"), Inverted(), IOStandard("TMDS_33")),
         Subsignal("data0_p", Pins("AA18"), IOStandard("TMDS_33")), # non-inverted
         Subsignal("data0_n", Pins("AB18"), IOStandard("TMDS_33")),
-        Subsignal("data1_p", Pins("AA19"), IOStandard("TMDS_33")), # inverted
-        Subsignal("data1_n", Pins("AB20"), IOStandard("TMDS_33")),
-        Subsignal("data2_p", Pins("AB21"), IOStandard("TMDS_33")), # inverted
-        Subsignal("data2_n", Pins("AB22"), IOStandard("TMDS_33")),
+        Subsignal("data1_p", Pins("AA19"), Inverted(), IOStandard("TMDS_33")), # inverted
+        Subsignal("data1_n", Pins("AB20"), Inverted(), IOStandard("TMDS_33")),
+        Subsignal("data2_p", Pins("AB21"), Inverted(), IOStandard("TMDS_33")), # inverted
+        Subsignal("data2_n", Pins("AB22"), Inverted(), IOStandard("TMDS_33")),
         Subsignal("scl", Pins("W17"), IOStandard("LVCMOS33")),
         Subsignal("sda", Pins("R17"), IOStandard("LVCMOS33")),
     ),
@@ -402,8 +402,7 @@ class VideoSoC(BaseSoC):
         self.submodules.hdmi_in0 = HDMIIn(hdmi_in0_pads,
                                          self.sdram.crossbar.get_port(mode="write"),
                                          fifo_depth=512,
-                                         device="xc7",
-                                         clk_polarity=1, datas_polarity=[1, 1, 1])
+                                         device="xc7")
         self.comb += self.hdmi_in0_freq.clk.eq(self.hdmi_in0.clocking.cd_pix.clk)
         self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix.clk, period_ns(1*pix_freq))
         self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix1p25x.clk, period_ns(1.25*pix_freq))
