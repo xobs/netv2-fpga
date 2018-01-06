@@ -129,8 +129,8 @@ _io = [
     ),
 
     ("hdmi_out", 0,
-        Subsignal("clk_p", Pins("W19"), IOStandard("TMDS_33")),   # inverted
-        Subsignal("clk_n", Pins("W20"), IOStandard("TMDS_33")),
+        Subsignal("clk_p", Pins("W19"), Inverted(), IOStandard("TMDS_33")),   # inverted
+        Subsignal("clk_n", Pins("W20"), Inverted(), IOStandard("TMDS_33")),
         Subsignal("data0_p", Pins("W21"), IOStandard("TMDS_33")), # non-inverted
         Subsignal("data0_n", Pins("W22"), IOStandard("TMDS_33")),
         Subsignal("data1_p", Pins("U20"), IOStandard("TMDS_33")), # non-inverted
