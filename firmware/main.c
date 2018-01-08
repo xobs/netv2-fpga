@@ -32,9 +32,6 @@ int main(void)
 	time_init();
 
 	processor_init();
-#ifdef CSR_HDMI_OUT0_BASE
-	processor_set_hdmi_out0_source(VIDEO_IN_PATTERN);
-#endif
 	processor_update();
 	processor_start(config_get(CONFIG_KEY_RESOLUTION));
 
