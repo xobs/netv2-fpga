@@ -206,7 +206,7 @@ class CRG(Module):
             Instance("BUFG", i_I=pll_sys4x, o_O=self.cd_sys4x.clk),
             Instance("BUFG", i_I=pll_sys4x_dqs, o_O=self.cd_sys4x_dqs.clk),
             AsyncResetSynchronizer(self.cd_sys, ~pll_locked | rst),
-            AsyncResetSynchronizer(self.cd_clk200, ~pll_locked | rst),
+            AsyncResetSynchronizer(self.cd_clk200, ~pll_locked | 1), # FIXME
             AsyncResetSynchronizer(self.cd_clk100, ~pll_locked | rst)
         ]
 
@@ -248,6 +248,8 @@ class BaseSoC(SoCSDRAM):
         # sdram
         self.submodules.ddrphy = a7ddrphy.A7DDRPHY(platform.request("ddram"))
         sdram_module = MT41J128M16(self.clk_freq, "1:4")
+        self.add_constant("READ_LEVELING_BITSLIP", 2)
+        self.add_constant("READ_LEVELING_DELAY", 8)
         self.register_sdram(self.ddrphy,
                             sdram_module.geom_settings,
                             sdram_module.timing_settings,
