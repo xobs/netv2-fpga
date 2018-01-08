@@ -46,17 +46,17 @@ NeTV2:
 UART:     OK
 PCIe:     OK (X1)
 DDR3:     OK
-HDMI_OUT: OK (up to 1080p60)
-HDMI_IN:  OK (up to 1080p60)
+HDMI_OUT: OK (with DVI up to 1080p60)
+HDMI_IN:  OK (with DVI up to 1080p60)
 
 NeTV2-MVP:
 UART:       OK
 PCIe:       UNTESTED
 DDR3:       OK
 HDMI_OUT_0: OK
-HDMI_IN_0:  UNTESTED
+HDMI_IN_0:  OK (with DVI up to 1080p60)
 HDMI_OUT_1: OK
-HDMI_IN_1:  UNTESTED
+HDMI_IN_1:  OK (with DVI up to 1080p60)
 
 [> Contact
 ----------

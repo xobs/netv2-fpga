@@ -1,4 +1,3 @@
-- Test HDMI in 0 & 1.
 - Add second HDMI in/out ports to NeTV2MVP.
 - Test PCIe on NeTV2MVP (up to Gen2 X2).
 - Add DMA Writer/Reader to/from DDR3

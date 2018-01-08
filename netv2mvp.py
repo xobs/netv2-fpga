@@ -432,7 +432,7 @@ class VideoSoC(BaseSoC):
             self.hdmi_out0.driver.clocking.cd_pix.clk,
             self.hdmi_out0.driver.clocking.cd_pix5x.clk)
 
-        # hdmi over (FIXME: need check)
+        # hdmi over
         self.comb += [
             platform.request("hdmi_sda_over_up").eq(0),
             platform.request("hdmi_sda_over_dn").eq(0),
