@@ -419,7 +419,7 @@ class VideoSoC(BaseSoC):
         # hdmi out
         hdmi_out0_dram_port = self.sdram.crossbar.get_port(mode="read", dw=16, cd="pix", reverse=True)
         self.submodules.hdmi_out0 = VideoOut(platform.device,
-                                            platform.request("hdmi_out"),
+                                            platform.request("hdmi_out", 0),
                                             hdmi_out0_dram_port,
                                             "ycbcr422",
                                             fifo_depth=4096)
