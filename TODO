@@ -1,7 +1,8 @@
-- create NeTV2MVP target (with pinout from bunnie)
+- Test HDMI in 0 & 1.
 - Add second HDMI in/out ports to NeTV2MVP.
-- Use PCIeX4 on NeTV2MVP.
+- Test PCIe on NeTV2MVP (up to Gen2 X2).
 - Add DMA Writer/Reader to/from DDR3
 - Test Host Memory <--> DDR3 DMAs
 - Test Host Memory --> DDR3 --> VideoOut
 - Test VideoIn --> DDR3 --> Host Memory
+- Test PCIe Gen2 X4 (requires LitePCIe changes).
