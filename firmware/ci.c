@@ -488,8 +488,8 @@ static void debug_ddr(void)
 	nw = sdram_controller_bandwidth_nwrites_read();
 	f = SYSTEM_CLOCK_FREQUENCY;
 	burstbits = (2*DFII_NPHASES) << DFII_PIX_DATA_SIZE;
-	rdb = (nr*f >> (24 - log2(burstbits)))/1000000ULL;
-	wrb = (nw*f >> (24 - log2(burstbits)))/1000000ULL;
+	rdb = (nr*f >> (27 - log2(burstbits)))/1000000ULL;
+	wrb = (nw*f >> (27 - log2(burstbits)))/1000000ULL;
 	wprintf("read:%5dMbps  write:%5dMbps  all:%5dMbps\r\n", rdb, wrb, rdb + wrb);
 }
 #endif
