@@ -42,6 +42,12 @@ _io = [
         IOStandard("LVCMOS33"),
     ),
 
+    ("serial_litescope", 0,
+        Subsignal("tx", Pins("C18")), # hax 10
+        Subsignal("rx", Pins("B20")), # hax 12
+        IOStandard("LVCMOS33")
+    ),
+
     ("ddram", 0,
         Subsignal("a", Pins(
             "U6 V4 W5 V5 AA1 Y2 AB1 AB3",
@@ -382,7 +388,8 @@ class VideoSoC(BaseSoC):
         "hdmi_out0",
         "hdmi_in0",
         "hdmi_in0_freq",
-        "hdmi_in0_edid_mem"
+        "hdmi_in0_edid_mem",
+        "analyzer"
     }
     csr_map_update(BaseSoC.csr_map, csr_peripherals)
 
@@ -438,6 +445,27 @@ class VideoSoC(BaseSoC):
             platform.request("hdmi_sda_over_dn").eq(0),
         ]
 
+        # analyzer
+        from litex.soc.cores.uart import UARTWishboneBridge
+        from litescope import LiteScopeAnalyzer
+
+        self.submodules.bridge = UARTWishboneBridge(
+            platform.request("serial_litescope"), self.clk_freq, baudrate=115200)
+        self.add_wb_master(self.bridge.wishbone)
+
+        analyzer_signals = [
+            self.hdmi_in0.data0_decod.valid_i,
+            self.hdmi_in0.data0_decod.input,
+            self.hdmi_in0.data1_decod.valid_i,
+            self.hdmi_in0.data1_decod.input,
+            self.hdmi_in0.data2_decod.valid_i,
+            self.hdmi_in0.data2_decod.input,
+        ]
+        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 2048, cd="hdmi_in0_pix", cd_ratio=2)
+
+    def do_exit(self, vns):
+        self.analyzer.export_csv(vns, "test/analyzer.csv")
+
 
 def main():
     platform = Platform()
@@ -452,6 +480,7 @@ def main():
         soc = VideoSoC(platform)
     builder = Builder(soc, output_dir="build")
     vns = builder.build()
+    soc.do_exit(vns)
 
     if sys.argv[1] == "pcie":
         csr_header = cpu_interface.get_csr_header(soc.get_csr_regions(), soc.get_constants())
