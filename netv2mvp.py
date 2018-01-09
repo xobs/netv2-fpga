@@ -173,9 +173,9 @@ class Platform(XilinxPlatform):
                                 toolchain=toolchain)
 
         self.add_platform_command(
-            "set_property CONFIG_VOLTAGE 1.5 [current_design]")
+            "set_property CONFIG_VOLTAGE 3.3 [current_design]")
         self.add_platform_command(
-            "set_property CFGBVS GND [current_design]")
+            "set_property CFGBVS VCCO [current_design]")
         self.add_platform_command(
             "set_property BITSTREAM.CONFIG.CONFIGRATE 22 [current_design]")
         self.add_platform_command(
