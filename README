@@ -51,7 +51,7 @@ HDMI_IN:  OK (with DVI up to 1080p60)
 
 NeTV2-MVP:
 UART:       OK
-PCIe:       UNTESTED
+PCIe:       OK (X2)
 DDR3:       OK
 HDMI_OUT_0: OK
 HDMI_IN_0:  OK (with DVI up to 1080p60)
