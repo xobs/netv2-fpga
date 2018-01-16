@@ -11,6 +11,7 @@ from litex.build.xilinx import XilinxPlatform
 from litex.soc.integration.soc_core import mem_decoder
 from litex.soc.integration.soc_sdram import *
 from litex.soc.integration.builder import *
+from litex.soc.integration.cpu_interface import get_csr_header
 from litex.soc.cores import dna, xadc
 from litex.soc.cores.frequency_meter import FrequencyMeter
 
@@ -339,11 +340,6 @@ class PCIeSoC(BaseSoC):
     }
     csr_map.update(BaseSoC.csr_map)
 
-    pcie_interrupt_map = {
-        "dma_writer": 0,
-        "dma_reader": 1,
-    }
-
     BaseSoC.mem_map["csr"] = 0x00000000
     BaseSoC.mem_map["rom"] = 0x20000000
 
@@ -371,17 +367,23 @@ class PCIeSoC(BaseSoC):
         self.submodules.msi = LitePCIeMSI()
         self.comb += self.msi.source.connect(self.pcie_phy.msi)
         self.interrupts = {
-            "dma_writer":    self.dma.writer.irq,
-            "dma_reader":    self.dma.reader.irq
+            "DMA_WRITER":    self.dma.writer.irq,
+            "DMA_READER":    self.dma.reader.irq
         }
-        for k, v in sorted(self.interrupts.items()):
-            self.comb += self.msi.irqs[self.pcie_interrupt_map[k]].eq(v)
+        for i, (k, v) in enumerate(sorted(self.interrupts.items())):
+            self.comb += self.msi.irqs[i].eq(v)
+            self.add_constant(k + "_INTERRUPT", i)
 
         # pcie led
         pcie_counter = Signal(32)
         self.sync.pcie += pcie_counter.eq(pcie_counter + 1)
         self.comb += self.pcie_led.eq(pcie_counter[26])
 
+    def generate_software_header(self):
+        csr_header = get_csr_header(self.get_csr_regions(),
+                                    self.get_constants(),
+                                    with_access_functions=False)
+        tools.write_to_file(os.path.join("software", "pcie", "kernel", "csr.h"), csr_header)
 
 class VideoSoC(BaseSoC):
     csr_peripherals = {
@@ -483,8 +485,7 @@ def main():
     soc.do_exit(vns)
 
     if sys.argv[1] == "pcie":
-        csr_header = cpu_interface.get_csr_header(soc.get_csr_regions(), soc.get_constants())
-        write_to_file(os.path.join("software", "pcie", "kernel", "csr.h"), csr_header)
+        soc.generate_software_header()
 
 if __name__ == "__main__":
     main()
