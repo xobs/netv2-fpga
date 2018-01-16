@@ -478,7 +478,7 @@ def main():
         soc = PCIeSoC(platform)
     elif sys.argv[1] == "video":
         soc = VideoSoC(platform)
-    builder = Builder(soc, output_dir="build")
+    builder = Builder(soc, output_dir="build", csr_csv="test/csr.csv")
     vns = builder.build()
     soc.do_exit(vns)
 
