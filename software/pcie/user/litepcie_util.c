@@ -203,6 +203,7 @@ void dump_version(void)
 {
     LitePCIeState *s;
     int i;
+    unsigned char fpga_identification[256];
 
     s = litepcie_open(LITEPCIE_FILENAME);
     if (!s) {
@@ -210,9 +211,9 @@ void dump_version(void)
         exit(1);
     }
 
-    for(i=0; i<30; i++)
-        printf("%c", litepcie_readl(s, CSR_IDENTIFIER_MEM_BASE + 4*(i+1)));
-    printf("\n");
+    for(i=0; i<256; i++)
+        fpga_identification[i] = litepcie_readl(s, CSR_IDENTIFIER_MEM_BASE + 4*i);
+    printf("FPGA identification=%s\n", fpga_identification);
 
     litepcie_close(s);
 }
