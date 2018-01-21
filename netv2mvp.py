@@ -27,8 +27,6 @@ from litepcie.frontend.wishbone import LitePCIeWishboneBridge
 from litevideo.input import HDMIIn
 from litevideo.output import VideoOut
 
-import cpu_interface
-
 
 _io = [
     ("clk50", 0, Pins("J19"), IOStandard("LVCMOS33")),
