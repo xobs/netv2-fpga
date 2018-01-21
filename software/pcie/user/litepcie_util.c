@@ -211,7 +211,7 @@ void dump_version(void)
     }
 
     for(i=0; i<30; i++)
-        printf("%c", litepcie_readl(s, IDENTIFIER_MEM_BASE + 4*(i+1)));
+        printf("%c", litepcie_readl(s, CSR_IDENTIFIER_MEM_BASE + 4*(i+1)));
     printf("\n");
 
     litepcie_close(s);
