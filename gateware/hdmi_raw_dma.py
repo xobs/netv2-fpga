@@ -36,7 +36,7 @@ class HDMIRawDMAWriter(Module):
                         base.eq(self.slot0_base))
 
         # dma
-        dma = LiteDRAMDMAWriter(dram_port)
+        dma = ResetInserter()(LiteDRAMDMAWriter(dram_port))
         self.submodules += dma
 
         # data
@@ -60,7 +60,8 @@ class HDMIRawDMAWriter(Module):
             dma.sink.valid.eq(self.valid),
             self.ready.eq(dma.sink.ready),
             If(~self.enable,
-                # FIXME: add dma and pipeline flush
+                dma.reset.eq(1),
+                dma_port.flush.eq(1),
                 NextState("IDLE")
             ).Elif(self.valid & self.ready,
                 NextValue(count, count + 4),
@@ -109,7 +110,7 @@ class HDMIRawDMAReader(Module):
                         base.eq(self.slot0_base))
 
         # dma
-        dma = LiteDRAMDMAReader(dram_port)
+        dma = ResetInserter()(LiteDRAMDMAReader(dram_port))
         self.submodules += dma
 
         # data
@@ -134,7 +135,8 @@ class HDMIRawDMAReader(Module):
         fsm.act("RUN",
             dma.sink.valid.eq(1),
             If(~self.enable,
-                # FIXME: add dma and pipeline flush
+                dma.reset.eq(1),
+                dram_port.flush.eq(1),
                 NextState("IDLE")
             ).Elif(dma.sink.ready,
                 NextValue(count, count + 4),
