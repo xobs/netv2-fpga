@@ -10,10 +10,10 @@ class HDMIRawDMAWriter(Module):
         awidth = dram_port.aw + ashift
 
         # control / parameters
-        self.enable = Signal(reset=1) # reset to 1 if not used
-        self.slot0_base = Signal(awidth)   # in bytes
-        self.slot1_base = Signal(awidth)   # in bytes
-        self.length = Signal(awidth)  # in bytes
+        self.enable = Signal(reset=1)    # reset to 1 if not used
+        self.slot0_base = Signal(awidth) # in bytes
+        self.slot1_base = Signal(awidth) # in bytes
+        self.length = Signal(awidth)     # in bytes
 
         # in stream
         self.start = Signal(reset=1) # i / reset to 1 if not used
@@ -30,7 +30,10 @@ class HDMIRawDMAWriter(Module):
         slot = Signal()
         base = Signal(awidth)
         self.sync += If(end, slot.eq(~slot))
-        self.comb += If(slot, base.eq(self.slot1_base)).Else(base.eq(self.slot0_base))
+        self.comb += If(slot,
+                        base.eq(self.slot1_base)
+                    ).Else(
+                        base.eq(self.slot0_base))
 
         # dma
         dma = LiteDRAMDMAWriter(dram_port)
@@ -77,19 +80,19 @@ class HDMIRawDMAReader(Module):
         awidth = dram_port.aw + ashift
 
         # control / parameters
-        self.enable = Signal(reset=1) # reset to 1 if not used
-        self.slot0_base = Signal(awidth)   # in bytes
-        self.slot1_base = Signal(awidth)   # in bytes
-        self.length = Signal(awidth)  # in bytes
+        self.enable = Signal(reset=1)    # reset to 1 if not used
+        self.slot0_base = Signal(awidth) # in bytes
+        self.slot1_base = Signal(awidth) # in bytes
+        self.length = Signal(awidth)     # in bytes
 
         # out stream
         self.start = Signal(reset=1) # i / reset to 1 if not used
-        self.idle = Signal()        # o
-        self.valid = Signal()       # o
-        self.ready = Signal()       # i
-        self.data0 = Signal(10)     # o
-        self.data1 = Signal(10)     # o
-        self.data2 = Signal(10)     # o
+        self.idle = Signal()         # o
+        self.valid = Signal()        # o
+        self.ready = Signal()        # i
+        self.data0 = Signal(10)      # o
+        self.data1 = Signal(10)      # o
+        self.data2 = Signal(10)      # o
 
         # # #
 
@@ -100,7 +103,10 @@ class HDMIRawDMAReader(Module):
         slot = Signal()
         base = Signal(awidth)
         self.sync += If(end, slot.eq(~slot))
-        self.comb += If(slot, base.eq(self.slot1_base)).Else(base.eq(self.slot0_base))
+        self.comb += If(slot,
+                        base.eq(self.slot1_base)
+                    ).Else(
+                        base.eq(self.slot0_base))
 
         # dma
         dma = LiteDRAMDMAReader(dram_port)
