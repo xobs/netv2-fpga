@@ -62,8 +62,8 @@ class HDMIRawDMAWriter(Module):
             ).Elif(self.valid & self.ready,
                 NextValue(count, count + 4),
                 If(count == (self.length - 4),
-                    NextValue(slot, ~slot),
-                    NextState("IDLE")
+                    NextValue(count, 0),
+                    NextValue(slot, ~slot)
                 )
             )
         )
@@ -133,8 +133,8 @@ class HDMIRawDMAReader(Module):
             ).Elif(dma.sink.ready,
                 NextValue(count, count + 4),
                 If(count == (self.length - 4),
-                    NextValue(slot, ~slot),
-                    NextState("IDLE")
+                    NextValue(count, 0),
+                    NextValue(slot, ~slot)
                 )
             )
         )
