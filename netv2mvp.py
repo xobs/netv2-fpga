@@ -27,6 +27,7 @@ from litepcie.frontend.wishbone import LitePCIeWishboneBridge
 from litevideo.input import HDMIIn
 from litevideo.output import VideoOut
 
+from gateware.dma import DMA, DMAControl
 from gateware.dma import HDMIRawDMAWriter, HDMIRawDMAReader
 
 
@@ -335,9 +336,11 @@ class BaseSoC(SoCSDRAM):
 
 class PCIeSoC(BaseSoC):
     csr_map = {
-        "pcie_phy": 20,
-        "dma":      21,
-        "msi":      22,
+        "pcie_phy":        20,
+        "dma":             21,
+        "msi":             22,
+        "dram_dma_writer": 23,
+        "dram_dma_reader": 24
     }
     csr_map.update(BaseSoC.csr_map)
 
@@ -362,7 +365,20 @@ class PCIeSoC(BaseSoC):
 
         # pcie dma
         self.submodules.dma = LitePCIeDMA(self.pcie_phy, self.pcie_endpoint, with_loopback=True)
-        self.dma.source.connect(self.dma.sink)
+        dram_dma_writer = DMA("write", self.sdram.crossbar.get_port(mode="write", dw=64))
+        dram_dma_reader = DMA("read", self.sdram.crossbar.get_port(mode="read", dw=64))
+        self.submodules += dram_dma_writer, dram_dma_reader
+        self.submodules.dram_dma_writer = DMAControl(dram_dma_writer)
+        self.submodules.dram_dma_reader = DMAControl(dram_dma_reader)
+        self.comb += [
+            dram_dma_writer.valid.eq(self.dma.source.valid),
+            self.dma.source.ready.eq(dram_dma_writer.ready),
+            dram_dma_writer.data.eq(self.dma.source.data),
+
+            self.dma.sink.valid.eq(dram_dma_reader.valid),
+            dram_dma_reader.ready.eq(self.dma.sink.ready),
+            self.dma.sink.data.eq(dram_dma_reader.data)
+        ]
 
         # pcie msi
         self.submodules.msi = LitePCIeMSI()

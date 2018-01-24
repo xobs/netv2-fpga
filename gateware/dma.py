@@ -85,7 +85,7 @@ class DMA(Module):
         self.comb += dma.sink.address.eq(base[ashift:] + count[ashift:])
 
 
-class DMAControl(DMA):
+class DMAControl(DMA, AutoCSR):
     def __init__(self, dma):
         self.enable = CSRStorage()
         self.slot0_base = CSRStorage(32)
