@@ -3,7 +3,6 @@
 - Inject captured hdmi data into litevideo input, simulate.
 - Test real hdmi support on board.
 - Add second HDMI in/out ports to NeTV2MVP.
-- Add DMA Writer/Reader to/from DDR3
 - Test Host Memory <--> DDR3 DMAs
 - Test Host Memory --> DDR3 --> VideoOut
 - Test VideoIn --> DDR3 --> Host Memory
