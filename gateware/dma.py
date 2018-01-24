@@ -3,8 +3,9 @@ from litex.gen import *
 from litedram.frontend.dma import LiteDRAMDMAWriter, LiteDRAMDMAReader
 
 
-class DMAWriter(Module):
-    def __init__(self, dram_port, fifo_depth=512):
+class DMA(Module):
+    def __init__(self, mode, dram_port, fifo_depth=512):
+        assert mode == dram_port.mode
         ashift = log2_int(dram_port.dw//8)
         awidth = dram_port.aw + ashift
 
@@ -18,6 +19,7 @@ class DMAWriter(Module):
         self.start = Signal(reset=1)      # i / reset to 1 if not used
         self.idle = Signal()              # o
         self.slot = Signal()              # o
+
         self.valid = Signal()             # i
         self.ready = Signal()             # o
         self.data  = Signal(dram_port.dw) # i
@@ -32,11 +34,20 @@ class DMAWriter(Module):
             ).Else(
                 base.eq(self.slot0_base))
 
-        # dma
-        self.submodules.dma = dma = ResetInserter()(LiteDRAMDMAWriter(dram_port, fifo_depth))
-
-        # data
-        self.comb += dma.sink.data.eq(self.data)
+        if mode == "write":
+            # dma
+            self.submodules.dma = dma = ResetInserter()(LiteDRAMDMAWriter(dram_port, fifo_depth))
+            # data
+            self.comb += dma.sink.data.eq(self.data)
+        elif mode == "read":
+            # dma
+            self.submodules.dma = dma = ResetInserter()(LiteDRAMDMAReader(dram_port, fifo_depth))
+            # data
+            self.comb += [
+                self.valid.eq(dma.source.valid),
+                dma.source.ready.eq(self.ready),
+                self.data.eq(dma.source.data)
+            ]
 
         # control
         count = Signal(awidth)
@@ -49,13 +60,17 @@ class DMAWriter(Module):
             )
         )
         fsm.act("RUN",
-            dma.sink.valid.eq(self.valid),
-            self.ready.eq(dma.sink.ready),
+            If(mode == "write",
+                dma.sink.valid.eq(self.valid),
+                self.ready.eq(dma.sink.ready),
+            ).Elif(mode == "read",
+                dma.sink.valid.eq(1),
+            ),
             If(~self.enable,
                 dma.reset.eq(1),
                 dram_port.flush.eq(1),
                 NextState("IDLE")
-            ).Elif(self.valid & self.ready,
+            ).Elif(dma.sink.valid & dma.sink.ready,
                 NextValue(count, count + 4),
                 If(count == (self.length - 4),
                     NextValue(count, 0),
@@ -66,9 +81,9 @@ class DMAWriter(Module):
         self.comb += dma.sink.address.eq(base[ashift:] + count[ashift:])
 
 
-class HDMIRawDMAWriter(DMAWriter):
+class HDMIRawDMAWriter(DMA):
     def __init__(self, dram_port, fifo_depth=512):
-        DMAWriter.__init__(self, dram_port, fifo_depth)
+        DMA.__init__(self, "write", dram_port, fifo_depth)
         assert dram_port.dw == 32
 
         # in stream
@@ -85,9 +100,9 @@ class HDMIRawDMAWriter(DMAWriter):
         ]
 
 
-class HDMIRGBDMAWriter(DMAWriter):
+class HDMIRGBDMAWriter(DMA):
     def __init__(self, dram_port, fifo_depth=512):
-        DMAWriter.__init__(self, dram_port, fifo_depth)
+        DMA.__init__(self, "write", dram_port, fifo_depth)
         assert dram_port.dw == 24
 
         # in stream
@@ -104,75 +119,9 @@ class HDMIRGBDMAWriter(DMAWriter):
         ]
 
 
-class DMAReader(Module):
+class HDMIRawDMAReader(DMA):
     def __init__(self, dram_port, fifo_depth=512):
-        ashift = log2_int(dram_port.dw//8)
-        awidth = dram_port.aw + ashift
-
-        # control / parameters
-        self.enable = Signal(reset=1)    # reset to 1 if not used
-        self.slot0_base = Signal(awidth) # in bytes
-        self.slot1_base = Signal(awidth) # in bytes
-        self.length = Signal(awidth)     # in bytes
-
-        # out stream
-        self.start = Signal(reset=1)      # i / reset to 1 if not used
-        self.idle = Signal()              # o
-        self.slot = Signal()              # o
-        self.valid = Signal()             # o
-        self.ready = Signal()             # i
-        self.data  = Signal(dram_port.dw) # o
-
-        # # #
-
-        # slot selection
-        base = Signal(awidth)
-        self.comb += \
-            If(self.slot,
-                base.eq(self.slot1_base)
-            ).Else(
-                base.eq(self.slot0_base))
-
-        # dma
-        self.submodules.dma = dma = ResetInserter()(LiteDRAMDMAReader(dram_port, fifo_depth))
-
-        # data
-        self.comb += [
-            self.valid.eq(dma.source.valid),
-            dma.source.ready.eq(self.ready),
-            self.data.eq(dma.source.data)
-        ]
-
-        # control
-        count = Signal(awidth)
-        self.submodules.fsm = fsm = FSM(reset_state="IDLE")
-        fsm.act("IDLE",
-            self.idle.eq(1),
-            If(self.enable & self.start,
-                NextValue(count, 0),
-                NextState("RUN")
-            )
-        )
-        fsm.act("RUN",
-            dma.sink.valid.eq(1),
-            If(~self.enable,
-                dma.reset.eq(1),
-                dram_port.flush.eq(1),
-                NextState("IDLE")
-            ).Elif(dma.sink.ready,
-                NextValue(count, count + 4),
-                If(count == (self.length - 4),
-                    NextValue(count, 0),
-                    NextValue(self.slot, ~self.slot)
-                )
-            )
-        )
-        self.comb += dma.sink.address.eq(base[ashift:] + count[ashift:])
-
-
-class HDMIRawDMAReader(DMAReader):
-    def __init__(self, dram_port, fifo_depth=512):
-        DMAReader.__init__(self, dram_port, fifo_depth)
+        DMA.__init__(self, "read", dram_port, fifo_depth)
         assert dram_port.dw == 32
 
         # in stream
@@ -189,9 +138,9 @@ class HDMIRawDMAReader(DMAReader):
         ]
 
 
-class HDMIRGBDMAReader(DMAReader):
+class HDMIRGBDMAReader(DMA):
     def __init__(self, dram_port, fifo_depth=512):
-        DMAReader.__init__(self, dram_port, fifo_depth)
+        DMA.__init__(self, "read", dram_port, fifo_depth)
         assert dram_port.dw == 14
 
         # in stream
