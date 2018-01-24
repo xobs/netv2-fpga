@@ -17,6 +17,7 @@ class DMAWriter(Module):
         # in stream
         self.start = Signal(reset=1)      # i / reset to 1 if not used
         self.idle = Signal()              # o
+        self.slot = Signal()              # o
         self.valid = Signal()             # i
         self.ready = Signal()             # o
         self.data  = Signal(dram_port.dw) # i
@@ -24,10 +25,9 @@ class DMAWriter(Module):
         # # #
 
         # slot selection
-        slot = Signal()
         base = Signal(awidth)
         self.comb += \
-            If(slot,
+            If(self.slot,
                 base.eq(self.slot1_base)
             ).Else(
                 base.eq(self.slot0_base))
@@ -59,7 +59,7 @@ class DMAWriter(Module):
                 NextValue(count, count + 4),
                 If(count == (self.length - 4),
                     NextValue(count, 0),
-                    NextValue(slot, ~slot)
+                    NextValue(self.slot, ~self.slot)
                 )
             )
         )
@@ -118,6 +118,7 @@ class DMAReader(Module):
         # out stream
         self.start = Signal(reset=1)      # i / reset to 1 if not used
         self.idle = Signal()              # o
+        self.slot = Signal()              # o
         self.valid = Signal()             # o
         self.ready = Signal()             # i
         self.data  = Signal(dram_port.dw) # o
@@ -125,10 +126,9 @@ class DMAReader(Module):
         # # #
 
         # slot selection
-        slot = Signal()
         base = Signal(awidth)
         self.comb += \
-            If(slot,
+            If(self.slot,
                 base.eq(self.slot1_base)
             ).Else(
                 base.eq(self.slot0_base))
@@ -163,7 +163,7 @@ class DMAReader(Module):
                 NextValue(count, count + 4),
                 If(count == (self.length - 4),
                     NextValue(count, 0),
-                    NextValue(slot, ~slot)
+                    NextValue(self.slot, ~self.slot)
                 )
             )
         )
