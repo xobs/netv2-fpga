@@ -4,7 +4,7 @@ from litedram.frontend.dma import LiteDRAMDMAWriter, LiteDRAMDMAReader
 
 
 class HDMIRawDMAWriter(Module):
-    def __init__(self, dram_port):
+    def __init__(self, dram_port, fifo_depth=512):
         assert dram_port.dw == 32
         ashift = log2_int(dram_port.dw//8)
         awidth = dram_port.aw + ashift
@@ -35,7 +35,7 @@ class HDMIRawDMAWriter(Module):
                         base.eq(self.slot0_base))
 
         # dma
-        dma = ResetInserter()(LiteDRAMDMAWriter(dram_port))
+        dma = ResetInserter()(LiteDRAMDMAWriter(dram_port, fifo_depth))
         self.submodules += dma
 
         # data
@@ -74,7 +74,7 @@ class HDMIRawDMAWriter(Module):
 
 
 class HDMIRawDMAReader(Module):
-    def __init__(self, dram_port):
+    def __init__(self, dram_port, fifo_depth=512):
         assert dram_port.dw == 32
         ashift = log2_int(dram_port.dw//8)
         awidth = dram_port.aw + ashift
@@ -96,9 +96,6 @@ class HDMIRawDMAReader(Module):
 
         # # #
 
-        dma = LiteDRAMDMAReader(dram_port)
-        self.submodules += dma
-
         # slot selection
         slot = Signal()
         base = Signal(awidth)
@@ -108,7 +105,7 @@ class HDMIRawDMAReader(Module):
                         base.eq(self.slot0_base))
 
         # dma
-        dma = ResetInserter()(LiteDRAMDMAReader(dram_port))
+        dma = ResetInserter()(LiteDRAMDMAReader(dram_port, fifo_depth))
         self.submodules += dma
 
         # data
