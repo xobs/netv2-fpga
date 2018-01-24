@@ -142,7 +142,7 @@ class VideoRawSoC(BaseSoC):
         # # #
 
         # parameters
-        slot_length = 1920*1080*32
+        slot_length = 1280*720*32
         slot_offset = 0x00000000
         slot0_base = slot_offset + 0*slot_length
         slot1_base = slot_offset + 1*slot_length

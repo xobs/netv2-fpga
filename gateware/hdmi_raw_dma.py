@@ -71,7 +71,7 @@ class HDMIRawDMAWriter(Module):
                 )
             )
         )
-        self.comb += dma.sink.address.eq(count[ashift:] + base[ashift:])
+        self.comb += dma.sink.address.eq(base[ashift:] + count[ashift:])
 
 
 class HDMIRawDMAReader(Module):
@@ -143,4 +143,4 @@ class HDMIRawDMAReader(Module):
                 )
             )
         )
-        self.comb += dma.sink.address.eq(count[ashift:] + base[ashift:])
+        self.comb += dma.sink.address.eq(base[ashift:] + count[ashift:])
