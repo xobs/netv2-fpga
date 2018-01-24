@@ -116,51 +116,6 @@ class DMAControl(DMA, AutoCSR):
         ]
 
 
-class LiteJESD204BCoreTXControl(Module, AutoCSR):
-    def __init__(self, core):
-        self.enable = CSRStorage()
-        self.ready = CSRStatus()
-
-        self.prbs_config = CSRStorage(4)
-        self.stpl_enable = CSRStorage()
-
-        self.jsync = CSRStatus()
-
-        self.restart_count_clear = CSR()
-        self.restart_count = CSRStatus(8)
-
-        # # #
-
-        # core control/status
-        self.comb += [
-            core.enable.eq(self.enable.storage),
-            core.prbs_config.eq(self.prbs_config.storage),
-            core.stpl_enable.eq(self.stpl_enable.storage),
-
-            self.ready.status.eq(core.ready)
-        ]
-        self.specials += MultiReg(core.jsync, self.jsync.status)
-
-        # restart monitoring
-
-        # restart is a slow signal so we simply pass it to sys_clk and
-        # count rising edges
-        restart = Signal()
-        restart_d = Signal()
-        restart_count = Signal(8)
-        self.specials += MultiReg(core.restart, restart)
-        self.sync += \
-            If(self.restart_count_clear.re,
-                restart_count.eq(0)
-            ).Elif(restart & ~restart_d,
-                # don't overflow when max is reached
-                If(restart_count != (2**8-1),
-                    restart_count.eq(restart_count + 1)
-                )
-            )
-        self.comb += self.restart_count.status.eq(restart_count)
-
-
 class HDMIRawDMAWriter(DMA):
     def __init__(self, dram_port, fifo_depth=512):
         DMA.__init__(self, "write", dram_port, fifo_depth)
