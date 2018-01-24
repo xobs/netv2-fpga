@@ -27,6 +27,8 @@ from litepcie.frontend.wishbone import LitePCIeWishboneBridge
 from litevideo.input import HDMIIn
 from litevideo.output import VideoOut
 
+from gateware.hdmi_raw_dma import HDMIRawDMAWriter, HDMIRawDMAReader
+
 
 _io = [
     ("clk50", 0, Pins("J19"), IOStandard("LVCMOS33")),
@@ -468,10 +470,101 @@ class VideoSoC(BaseSoC):
         self.analyzer.export_csv(vns, "test/analyzer.csv")
 
 
+class VideoRawSoC(BaseSoC):
+    csr_peripherals = {
+        "analyzer"
+    }
+    csr_map_update(BaseSoC.csr_map, csr_peripherals)
+
+    def __init__(self, platform, *args, **kwargs):
+        BaseSoC.__init__(self, platform, *args, **kwargs)
+
+        # # #
+
+        # parameters
+        slot_length = 1920*1080*32
+        slot_offset = 0x00000000
+        slot0_base = slot_offset + 0*slot_length
+        slot1_base = slot_offset + 1*slot_length
+
+        # dram dmas
+        dma_writer = HDMIRawDMAWriter(self.sdram.crossbar.get_port(mode="write", dw=32, cd="pix"))
+        dma_writer = ClockDomainsRenamer("pix")(dma_writer)
+        dma_reader = HDMIRawDMAReader(self.sdram.crossbar.get_port(mode="read", dw=32, cd="pix"))
+        dma_reader = ClockDomainsRenamer("pix")(dma_reader)
+        self.submodules += dma_writer, dma_reader
+
+        # hdmi in
+
+        # FIXME: integrage hdmi in core here (with bypass)
+        self.clock_domains.cd_pix = ClockDomain() # Remove once hdmi in integrated
+        self.comb += [
+            self.cd_pix.clk.eq(ClockSignal()),
+            self.cd_pix.rst.eq(ResetSignal())
+        ]
+
+        # hdmi in dma
+        self.comb += [
+            # control
+            dma_writer.enable.eq(1), # FIXME
+            dma_writer.slot0_base.eq(slot0_base),
+            dma_writer.slot1_base.eq(slot1_base),
+            dma_writer.length.eq(slot_length),
+
+            # stream
+            dma_writer.start.eq(0), # FIXME
+            #dma_writer.idle        # FIXME
+            dma_writer.valid.eq(0), # FIXME
+            #dma_writer.ready       # FIXME
+            dma_writer.data0.eq(0), # FIXME
+            dma_writer.data1.eq(0), # FIXME
+            dma_writer.data2.eq(0), # FIXME
+        ]
+
+
+        # hdmi out dma
+        self.comb += [
+            # control
+            dma_reader.enable.eq(1), # FIXME
+            dma_reader.slot0_base.eq(slot0_base),
+            dma_reader.slot1_base.eq(slot1_base),
+            dma_reader.length.eq(slot_length),
+
+            # stream
+            dma_reader.start.eq(0), # FIXME
+            #dma_reader.idle        # FIXME
+            #dma_reader.valid       # FIXME
+            dma_reader.ready.eq(0), # FIXME
+            #dma_reader.data0       # FIXME
+            #dma_reader.data1       # FIXME
+            #dma_reader.data2       # FIXME
+        ]
+
+        # hdmi out
+
+        # FIXME: integrage hdmi out core here (with bypass)
+
+
+        # analyzer
+        from litex.soc.cores.uart import UARTWishboneBridge
+        from litescope import LiteScopeAnalyzer
+
+        self.submodules.bridge = UARTWishboneBridge(
+            platform.request("serial_litescope"), self.clk_freq, baudrate=115200)
+        self.add_wb_master(self.bridge.wishbone)
+
+        analyzer_signals = [
+            Signal(2)
+        ]
+        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 128, cd="pix", cd_ratio=2)
+
+    def do_exit(self, vns):
+        self.analyzer.export_csv(vns, "test/analyzer.csv")
+
 def main():
     platform = Platform()
     if len(sys.argv) < 2:
-        print("missing target (base or pcie or video)")
+        print("missing target (base or pcie or video or video_raw)")
         exit()
     if sys.argv[1] == "base":
         soc = BaseSoC(platform)
@@ -479,6 +572,8 @@ def main():
         soc = PCIeSoC(platform)
     elif sys.argv[1] == "video":
         soc = VideoSoC(platform)
+    elif sys.argv[1] == "video_raw":
+        soc = VideoRawSoC(platform)
     builder = Builder(soc, output_dir="build", csr_csv="test/csr.csv")
     vns = builder.build()
     soc.do_exit(vns)

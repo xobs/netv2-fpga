@@ -29,7 +29,6 @@ class HDMIRawDMAWriter(Module):
         # slot selection
         slot = Signal()
         base = Signal(awidth)
-        self.sync += If(end, slot.eq(~slot))
         self.comb += If(slot,
                         base.eq(self.slot1_base)
                     ).Else(
@@ -61,7 +60,7 @@ class HDMIRawDMAWriter(Module):
             self.ready.eq(dma.sink.ready),
             If(~self.enable,
                 dma.reset.eq(1),
-                dma_port.flush.eq(1),
+                dram_port.flush.eq(1),
                 NextState("IDLE")
             ).Elif(self.valid & self.ready,
                 NextValue(count, count + 4),
@@ -103,7 +102,6 @@ class HDMIRawDMAReader(Module):
         # slot selection
         slot = Signal()
         base = Signal(awidth)
-        self.sync += If(end, slot.eq(~slot))
         self.comb += If(slot,
                         base.eq(self.slot1_base)
                     ).Else(
