@@ -29,10 +29,11 @@ class HDMIRawDMAWriter(Module):
         # slot selection
         slot = Signal()
         base = Signal(awidth)
-        self.comb += If(slot,
-                        base.eq(self.slot1_base)
-                    ).Else(
-                        base.eq(self.slot0_base))
+        self.comb += \
+            If(slot,
+                base.eq(self.slot1_base)
+            ).Else(
+                base.eq(self.slot0_base))
 
         # dma
         dma = ResetInserter()(LiteDRAMDMAWriter(dram_port, fifo_depth))
@@ -99,10 +100,11 @@ class HDMIRawDMAReader(Module):
         # slot selection
         slot = Signal()
         base = Signal(awidth)
-        self.comb += If(slot,
-                        base.eq(self.slot1_base)
-                    ).Else(
-                        base.eq(self.slot0_base))
+        self.comb += \
+            If(slot,
+                base.eq(self.slot1_base)
+            ).Else(
+                base.eq(self.slot0_base))
 
         # dma
         dma = ResetInserter()(LiteDRAMDMAReader(dram_port, fifo_depth))

@@ -107,9 +107,10 @@ class BaseSoC(SoCSDRAM):
     def __init__(self, platform, **kwargs):
         clk_freq = int(100e6)
         SoCSDRAM.__init__(self, platform, clk_freq,
+            l2_size=32,
             integrated_rom_size=0x8000,
             integrated_sram_size=0x8000,
-            ident="Art LiteX Base SoC",
+            ident="Arty DMA Test SoC",
             ident_version=True,
             reserve_nmi_interrupt=False,
             **kwargs)
@@ -160,15 +161,36 @@ class VideoRawSoC(BaseSoC):
         dma_reader = ClockDomainsRenamer("pix")(dma_reader)
         self.submodules += dma_writer, dma_reader
 
+        # quick "user manual" :)
+        # user_sw0 : dma writer enable
+        # user_sw1 : dma writer valid
+        # user sw2 : dma reader enable
+        # user sw3 : dma reader ready
+
+        # user_btn0: dma writer start
+        # user_btn1: dma_reader start
+        # user_btn2: error injection
+
+        # user_led0: dma_writer idle
+        # user_led1: dma_writer ready
+        # user_led2: dma_reader idle
+        # user_led3: dma_reader valid
+
         # test
         idata0 = Signal(10)
         idata1 = Signal(10)
         idata2 = Signal(10)
 
         self.sync.pix += [
-            idata0.eq(idata0 + 1),
-            idata1.eq(idata1 + 2),
-            idata2.eq(idata2 + 4)
+            If(~platform.request("user_btn", 2),
+                idata0.eq(idata0 + 1),
+                idata1.eq(idata1 + 2),
+                idata2.eq(idata2 + 4)
+            ).Else(
+                idata0.eq(0),
+                idata1.eq(0),
+                idata2.eq(0)
+            )
         ]
 
         # dma
@@ -188,7 +210,6 @@ class VideoRawSoC(BaseSoC):
             dma_writer.data1.eq(idata1),
             dma_writer.data2.eq(idata2),
         ]
-
 
          # test
         odata0 = Signal(10)
@@ -226,13 +247,13 @@ class VideoRawSoC(BaseSoC):
             odata0_d.eq(odata0),
             odata1_d.eq(odata1),
             odata2_d.eq(odata2),
-            If(odata0 != (odata0 + 1),
+            If(odata0 != (odata0_d + 1),
                 errors.r[0].eq(1),
                 errors.g[0].eq(0)),
-            If(odata1 != (odata1 + 1),
+            If(odata1 != (odata1_d + 2),
                 errors.r[1].eq(1),
                 errors.g[1].eq(0)),
-            If(odata2 != (odata2 + 1),
+            If(odata2 != (odata2_d + 4),
                 errors.r[2].eq(1),
                 errors.g[2].eq(0)),
         ]
