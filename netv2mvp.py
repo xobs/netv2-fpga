@@ -27,7 +27,7 @@ from litepcie.frontend.wishbone import LitePCIeWishboneBridge
 from litevideo.input import HDMIIn
 from litevideo.output import VideoOut
 
-from gateware.hdmi_raw_dma import HDMIRawDMAWriter, HDMIRawDMAReader
+from gateware.dma import HDMIRawDMAWriter, HDMIRawDMAReader
 
 
 _io = [
@@ -516,9 +516,9 @@ class VideoRawSoC(BaseSoC):
             #dma_writer.idle        # FIXME
             dma_writer.valid.eq(0), # FIXME
             #dma_writer.ready       # FIXME
-            dma_writer.data0.eq(0), # FIXME
-            dma_writer.data1.eq(0), # FIXME
-            dma_writer.data2.eq(0), # FIXME
+            dma_writer.c0.eq(0),    # FIXME
+            dma_writer.c1.eq(0),    # FIXME
+            dma_writer.c2.eq(0),    # FIXME
         ]
 
 
@@ -535,9 +535,9 @@ class VideoRawSoC(BaseSoC):
             #dma_reader.idle        # FIXME
             #dma_reader.valid       # FIXME
             dma_reader.ready.eq(0), # FIXME
-            #dma_reader.data0       # FIXME
-            #dma_reader.data1       # FIXME
-            #dma_reader.data2       # FIXME
+            #dma_reader.c0          # FIXME
+            #dma_reader.c1          # FIXME
+            #dma_reader.c2          # FIXME
         ]
 
         # hdmi out

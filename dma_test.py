@@ -16,7 +16,7 @@ from litedram.modules import MT41J128M16
 from litedram.phy import a7ddrphy
 from litedram.core import ControllerSettings
 
-from gateware.hdmi_raw_dma import HDMIRawDMAWriter, HDMIRawDMAReader
+from gateware.dma import HDMIRawDMAWriter, HDMIRawDMAReader
 
 
 def csr_map_update(csr_map, csr_peripherals):
@@ -206,9 +206,9 @@ class VideoRawSoC(BaseSoC):
             platform.request("user_led", 0).eq(dma_writer.idle),
             dma_writer.valid.eq(platform.request("user_sw", 1)),
             platform.request("user_led", 1).eq(dma_writer.ready),
-            dma_writer.data0.eq(idata0),
-            dma_writer.data1.eq(idata1),
-            dma_writer.data2.eq(idata2),
+            dma_writer.c0.eq(idata0),
+            dma_writer.c1.eq(idata1),
+            dma_writer.c2.eq(idata2),
         ]
 
          # test
@@ -229,9 +229,9 @@ class VideoRawSoC(BaseSoC):
             platform.request("user_led", 2).eq(dma_reader.idle),
             platform.request("user_led", 3).eq(dma_reader.valid),
             dma_reader.ready.eq(platform.request("user_sw", 3)),
-            odata0.eq(dma_reader.data0),
-            odata1.eq(dma_reader.data1),
-            odata2.eq(dma_reader.data2),
+            odata0.eq(dma_reader.c0),
+            odata1.eq(dma_reader.c1),
+            odata2.eq(dma_reader.c2),
         ]
 
         # check

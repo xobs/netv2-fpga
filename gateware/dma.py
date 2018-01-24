@@ -3,9 +3,8 @@ from litex.gen import *
 from litedram.frontend.dma import LiteDRAMDMAWriter, LiteDRAMDMAReader
 
 
-class HDMIRawDMAWriter(Module):
+class DMAWriter(Module):
     def __init__(self, dram_port, fifo_depth=512):
-        assert dram_port.dw == 32
         ashift = log2_int(dram_port.dw//8)
         awidth = dram_port.aw + ashift
 
@@ -16,13 +15,11 @@ class HDMIRawDMAWriter(Module):
         self.length = Signal(awidth)     # in bytes
 
         # in stream
-        self.start = Signal(reset=1) # i / reset to 1 if not used
-        self.idle = Signal()         # o
-        self.valid = Signal()        # i
-        self.ready = Signal()        # o
-        self.data0 = Signal(10)      # i
-        self.data1 = Signal(10)      # i
-        self.data2 = Signal(10)      # i
+        self.start = Signal(reset=1)      # i / reset to 1 if not used
+        self.idle = Signal()              # o
+        self.valid = Signal()             # i
+        self.ready = Signal()             # o
+        self.data  = Signal(dram_port.dw) # i
 
         # # #
 
@@ -36,15 +33,10 @@ class HDMIRawDMAWriter(Module):
                 base.eq(self.slot0_base))
 
         # dma
-        dma = ResetInserter()(LiteDRAMDMAWriter(dram_port, fifo_depth))
-        self.submodules += dma
+        self.submodules.dma = dma = ResetInserter()(LiteDRAMDMAWriter(dram_port, fifo_depth))
 
         # data
-        self.comb += [
-            dma.sink.data[00:10].eq(self.data0),
-            dma.sink.data[10:20].eq(self.data1),
-            dma.sink.data[20:30].eq(self.data2)
-        ]
+        self.comb += dma.sink.data.eq(self.data)
 
         # control
         count = Signal(awidth)
@@ -74,9 +66,46 @@ class HDMIRawDMAWriter(Module):
         self.comb += dma.sink.address.eq(base[ashift:] + count[ashift:])
 
 
-class HDMIRawDMAReader(Module):
+class HDMIRawDMAWriter(DMAWriter):
     def __init__(self, dram_port, fifo_depth=512):
+        DMAWriter.__init__(self, dram_port, fifo_depth)
         assert dram_port.dw == 32
+
+        # in stream
+        self.c0 = Signal(10) # i
+        self.c1 = Signal(10) # i
+        self.c2 = Signal(10) # i
+
+        # # #
+
+        self.comb += [
+            self.dma.sink.data[0:10].eq(self.c0),
+            self.dma.sink.data[10:20].eq(self.c1),
+            self.dma.sink.data[20:30].eq(self.c2)
+        ]
+
+
+class HDMIRGBDMAWriter(DMAWriter):
+    def __init__(self, dram_port, fifo_depth=512):
+        DMAWriter.__init__(self, dram_port, fifo_depth)
+        assert dram_port.dw == 24
+
+        # in stream
+        self.r = Signal(8) # i
+        self.g = Signal(8) # i
+        self.b = Signal(8) # i
+
+        # # #
+
+        self.comb += [
+            self.dma.sink.data[0:8].eq(self.r),
+            self.dma.sink.data[8:16].eq(self.g),
+            self.dma.sink.data[16:24].eq(self.b)
+        ]
+
+
+class DMAReader(Module):
+    def __init__(self, dram_port, fifo_depth=512):
         ashift = log2_int(dram_port.dw//8)
         awidth = dram_port.aw + ashift
 
@@ -87,13 +116,11 @@ class HDMIRawDMAReader(Module):
         self.length = Signal(awidth)     # in bytes
 
         # out stream
-        self.start = Signal(reset=1) # i / reset to 1 if not used
-        self.idle = Signal()         # o
-        self.valid = Signal()        # o
-        self.ready = Signal()        # i
-        self.data0 = Signal(10)      # o
-        self.data1 = Signal(10)      # o
-        self.data2 = Signal(10)      # o
+        self.start = Signal(reset=1)      # i / reset to 1 if not used
+        self.idle = Signal()              # o
+        self.valid = Signal()             # o
+        self.ready = Signal()             # i
+        self.data  = Signal(dram_port.dw) # o
 
         # # #
 
@@ -107,16 +134,13 @@ class HDMIRawDMAReader(Module):
                 base.eq(self.slot0_base))
 
         # dma
-        dma = ResetInserter()(LiteDRAMDMAReader(dram_port, fifo_depth))
-        self.submodules += dma
+        self.submodules.dma = dma = ResetInserter()(LiteDRAMDMAReader(dram_port, fifo_depth))
 
         # data
         self.comb += [
             self.valid.eq(dma.source.valid),
             dma.source.ready.eq(self.ready),
-            self.data0.eq(dma.source.data[00:10]),
-            self.data1.eq(dma.source.data[10:20]),
-            self.data2.eq(dma.source.data[20:30]),
+            self.data.eq(dma.source.data)
         ]
 
         # control
@@ -144,3 +168,41 @@ class HDMIRawDMAReader(Module):
             )
         )
         self.comb += dma.sink.address.eq(base[ashift:] + count[ashift:])
+
+
+class HDMIRawDMAReader(DMAReader):
+    def __init__(self, dram_port, fifo_depth=512):
+        DMAReader.__init__(self, dram_port, fifo_depth)
+        assert dram_port.dw == 32
+
+        # in stream
+        self.c0 = Signal(10) # o
+        self.c1 = Signal(10) # o
+        self.c2 = Signal(10) # o
+
+        # # #
+
+        self.comb += [
+            self.c0.eq(self.dma.source.data[0:10]),
+            self.c1.eq(self.dma.source.data[10:20]),
+            self.c2.eq(self.dma.source.data[20:30])
+        ]
+
+
+class HDMIRGBDMAReader(DMAReader):
+    def __init__(self, dram_port, fifo_depth=512):
+        DMAReader.__init__(self, dram_port, fifo_depth)
+        assert dram_port.dw == 14
+
+        # in stream
+        self.r = Signal(8) # o
+        self.g = Signal(9) # o
+        self.b = Signal(8) # o
+
+        # # #
+
+        self.comb += [
+            self.r.eq(self.dma.source.data[0:8]),
+            self.g.eq(self.dma.source.data[8:16]),
+            self.b.eq(self.dma.source.data[16:24])
+        ]
