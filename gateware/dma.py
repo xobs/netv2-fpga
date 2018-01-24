@@ -1,4 +1,7 @@
 from litex.gen import *
+from litex.gen.genlib.cdc import MultiReg, PulseSynchronizer
+
+from litex.soc.interconnect.csr import *
 
 from litedram.frontend.dma import LiteDRAMDMAWriter, LiteDRAMDMAReader
 
@@ -8,6 +11,7 @@ class DMA(Module):
         assert mode == dram_port.mode
         ashift = log2_int(dram_port.dw//8)
         awidth = dram_port.aw + ashift
+        self.cd = dram_port.cd
 
         # control / parameters
         self.enable = Signal(reset=1)    # reset to 1 if not used
@@ -79,6 +83,82 @@ class DMA(Module):
             )
         )
         self.comb += dma.sink.address.eq(base[ashift:] + count[ashift:])
+
+
+class DMAControl(DMA):
+    def __init__(self, dma):
+        self.enable = CSRStorage()
+        self.slot0_base = CSRStorage(32)
+        self.slot1_base = CSRStorage(32)
+        self.length = CSRStorage(32)
+
+        self.start = CSR()
+        self.idle = CSRStatus()
+        self.slot = CSRStatus()
+
+        # # #
+
+        self.specials += [
+            MultiReg(self.enable.storage, dma.enable, dma.cd),
+            MultiReg(self.slot0_base.storage, dma.slot0_base, dma.cd),
+            MultiReg(self.slot1_base.storage, dma.slot1_base, dma.cd),
+            MultiReg(self.length.storage, dma.length, dma.cd),
+
+            MultiReg(dma.idle, self.idle.status),
+            MultiReg(dma.slot, self.slot.status),
+        ]
+
+        start_sync = PulseSynchronizer("sys", dma.cd)
+        self.submodules += start_sync
+        self.comb += [
+            start_sync.i.eq(self.start.re),
+            dma.start.eq(start_sync.o)
+        ]
+
+
+class LiteJESD204BCoreTXControl(Module, AutoCSR):
+    def __init__(self, core):
+        self.enable = CSRStorage()
+        self.ready = CSRStatus()
+
+        self.prbs_config = CSRStorage(4)
+        self.stpl_enable = CSRStorage()
+
+        self.jsync = CSRStatus()
+
+        self.restart_count_clear = CSR()
+        self.restart_count = CSRStatus(8)
+
+        # # #
+
+        # core control/status
+        self.comb += [
+            core.enable.eq(self.enable.storage),
+            core.prbs_config.eq(self.prbs_config.storage),
+            core.stpl_enable.eq(self.stpl_enable.storage),
+
+            self.ready.status.eq(core.ready)
+        ]
+        self.specials += MultiReg(core.jsync, self.jsync.status)
+
+        # restart monitoring
+
+        # restart is a slow signal so we simply pass it to sys_clk and
+        # count rising edges
+        restart = Signal()
+        restart_d = Signal()
+        restart_count = Signal(8)
+        self.specials += MultiReg(core.restart, restart)
+        self.sync += \
+            If(self.restart_count_clear.re,
+                restart_count.eq(0)
+            ).Elif(restart & ~restart_d,
+                # don't overflow when max is reached
+                If(restart_count != (2**8-1),
+                    restart_count.eq(restart_count + 1)
+                )
+            )
+        self.comb += self.restart_count.status.eq(restart_count)
 
 
 class HDMIRawDMAWriter(DMA):
