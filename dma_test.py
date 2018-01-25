@@ -16,7 +16,7 @@ from litedram.modules import MT41J128M16
 from litedram.phy import a7ddrphy
 from litedram.core import ControllerSettings
 
-from gateware.dma import HDMIRawDMAWriter, HDMIRawDMAReader
+from gateware.dma import DMAWriter, DMAReader
 
 
 def csr_map_update(csr_map, csr_peripherals):
@@ -135,7 +135,7 @@ class BaseSoC(SoCSDRAM):
                                                                    with_refresh=True))
 
 
-class VideoRawSoC(BaseSoC):
+class DMATestSoC(BaseSoC):
     def __init__(self, platform, *args, **kwargs):
         BaseSoC.__init__(self, platform, *args, **kwargs)
 
@@ -155,9 +155,9 @@ class VideoRawSoC(BaseSoC):
         ]
 
         # dram dmas
-        dma_writer = HDMIRawDMAWriter(self.sdram.crossbar.get_port(mode="write", dw=32, cd="pix"))
+        dma_writer = DMAWriter(self.sdram.crossbar.get_port(mode="write", dw=32, cd="pix"))
         dma_writer = ClockDomainsRenamer("pix")(dma_writer)
-        dma_reader = HDMIRawDMAReader(self.sdram.crossbar.get_port(mode="read", dw=32, cd="pix"))
+        dma_reader = DMAReader(self.sdram.crossbar.get_port(mode="read", dw=32, cd="pix"))
         dma_reader = ClockDomainsRenamer("pix")(dma_reader)
         self.submodules += dma_writer, dma_reader
 
@@ -204,11 +204,11 @@ class VideoRawSoC(BaseSoC):
             # stream
             dma_writer.start.eq(platform.request("user_btn", 0)),
             platform.request("user_led", 0).eq(dma_writer.idle),
-            dma_writer.valid.eq(platform.request("user_sw", 1)),
-            platform.request("user_led", 1).eq(dma_writer.ready),
-            dma_writer.c0.eq(idata0),
-            dma_writer.c1.eq(idata1),
-            dma_writer.c2.eq(idata2),
+            dma_writer.sink.valid.eq(platform.request("user_sw", 1)),
+            platform.request("user_led", 1).eq(dma_writer.sink.ready),
+            dma_writer.sink.data[0:10].eq(idata0),
+            dma_writer.sink.data[10:20].eq(idata1),
+            dma_writer.sink.data[20:30].eq(idata2),
         ]
 
          # test
@@ -227,11 +227,11 @@ class VideoRawSoC(BaseSoC):
             # stream
             dma_reader.start.eq(platform.request("user_btn", 1)),
             platform.request("user_led", 2).eq(dma_reader.idle),
-            platform.request("user_led", 3).eq(dma_reader.valid),
-            dma_reader.ready.eq(platform.request("user_sw", 3)),
-            odata0.eq(dma_reader.c0),
-            odata1.eq(dma_reader.c1),
-            odata2.eq(dma_reader.c2),
+            platform.request("user_led", 3).eq(dma_reader.source.valid),
+            dma_reader.source.ready.eq(platform.request("user_sw", 3)),
+            odata0.eq(dma_reader.source.data[0:10]),
+            odata1.eq(dma_reader.source.data[10:20]),
+            odata2.eq(dma_reader.source.data[20:30]),
         ]
 
         # check
@@ -263,7 +263,7 @@ class VideoRawSoC(BaseSoC):
 
 def main():
     platform = arty.Platform()
-    soc = VideoRawSoC(platform)
+    soc = DMATestSoC(platform)
     builder = Builder(soc, output_dir="build", csr_csv="test/csr.csv")
     vns = builder.build()
     soc.do_exit(vns)

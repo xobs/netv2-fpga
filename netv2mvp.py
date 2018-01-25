@@ -27,8 +27,7 @@ from litepcie.frontend.wishbone import LitePCIeWishboneBridge
 from litevideo.input import HDMIIn
 from litevideo.output import VideoOut
 
-from gateware.dma import DMA, DMAControl
-from gateware.dma import HDMIRawDMAWriter, HDMIRawDMAReader
+from gateware.dma import DMAWriter, DMAReader, DMAControl
 
 
 _io = [
@@ -365,19 +364,14 @@ class PCIeSoC(BaseSoC):
 
         # pcie dma
         self.submodules.dma = LitePCIeDMA(self.pcie_phy, self.pcie_endpoint, with_loopback=True)
-        dram_dma_writer = DMA("write", self.sdram.crossbar.get_port(mode="write", dw=64))
-        dram_dma_reader = DMA("read", self.sdram.crossbar.get_port(mode="read", dw=64))
+        dram_dma_writer = DMAWriter(self.sdram.crossbar.get_port(mode="write", dw=64))
+        dram_dma_reader = DMAReader(self.sdram.crossbar.get_port(mode="read", dw=64))
         self.submodules += dram_dma_writer, dram_dma_reader
         self.submodules.dram_dma_writer = DMAControl(dram_dma_writer)
         self.submodules.dram_dma_reader = DMAControl(dram_dma_reader)
         self.comb += [
-            dram_dma_writer.valid.eq(self.dma.source.valid),
-            self.dma.source.ready.eq(dram_dma_writer.ready),
-            dram_dma_writer.data.eq(self.dma.source.data),
-
-            self.dma.sink.valid.eq(dram_dma_reader.valid),
-            dram_dma_reader.ready.eq(self.dma.sink.ready),
-            self.dma.sink.data.eq(dram_dma_reader.data)
+            self.dma.source.connect(dram_dma_writer.sink),
+            dram_dma_reader.source.connect(self.dma.sink)
         ]
 
         # pcie msi
@@ -504,9 +498,9 @@ class VideoRawSoC(BaseSoC):
         slot1_base = slot_offset + 1*slot_length
 
         # dram dmas
-        dma_writer = HDMIRawDMAWriter(self.sdram.crossbar.get_port(mode="write", dw=32, cd="pix"))
+        dma_writer = DMAWriter(self.sdram.crossbar.get_port(mode="write", dw=32, cd="pix"))
         dma_writer = ClockDomainsRenamer("pix")(dma_writer)
-        dma_reader = HDMIRawDMAReader(self.sdram.crossbar.get_port(mode="read", dw=32, cd="pix"))
+        dma_reader = DMAReader(self.sdram.crossbar.get_port(mode="read", dw=32, cd="pix"))
         dma_reader = ClockDomainsRenamer("pix")(dma_reader)
         self.submodules += dma_writer, dma_reader
 
@@ -528,13 +522,13 @@ class VideoRawSoC(BaseSoC):
             dma_writer.length.eq(slot_length),
 
             # stream
-            dma_writer.start.eq(0), # FIXME
-            #dma_writer.idle        # FIXME
-            dma_writer.valid.eq(0), # FIXME
-            #dma_writer.ready       # FIXME
-            dma_writer.c0.eq(0),    # FIXME
-            dma_writer.c1.eq(0),    # FIXME
-            dma_writer.c2.eq(0),    # FIXME
+            dma_writer.start.eq(0),            # FIXME
+            #dma_writer.idle                   # FIXME
+            dma_writer.sink.valid.eq(0),       # FIXME
+            #dma_writer.sink.ready             # FIXME
+            dma_writer.sink.data[0:10].eq(0),  # FIXME
+            dma_writer.sink.data[10:20].eq(0), # FIXME
+            dma_writer.sink.data[20:30].eq(0), # FIXME
         ]
 
 
@@ -549,11 +543,11 @@ class VideoRawSoC(BaseSoC):
             # stream
             dma_reader.start.eq(0), # FIXME
             #dma_reader.idle        # FIXME
-            #dma_reader.valid       # FIXME
-            dma_reader.ready.eq(0), # FIXME
-            #dma_reader.c0          # FIXME
-            #dma_reader.c1          # FIXME
-            #dma_reader.c2          # FIXME
+            #dma_reader.source.valid       # FIXME
+            dma_reader.source.ready.eq(0), # FIXME
+            #dma_reader.source.data[0:10]  # FIXME
+            #dma_reader.source.data[10:20] # FIXME
+            #dma_reader.source.data[20:30] # FIXME
         ]
 
         # hdmi out
