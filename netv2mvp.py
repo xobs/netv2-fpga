@@ -26,6 +26,7 @@ from litepcie.frontend.wishbone import LitePCIeWishboneBridge
 
 from litevideo.input import HDMIIn
 from litevideo.output import VideoOut
+from litevideo.output.hdmi.s7 import S7HDMIOutEncoderSerializer, S7HDMIOutPHY
 
 from gateware.dma import DMAWriter, DMAReader, DMAControl
 
@@ -480,7 +481,7 @@ class VideoSoC(BaseSoC):
         self.analyzer.export_csv(vns, "test/analyzer.csv")
 
 
-class VideoRawSoC(BaseSoC):
+class VideoRawDMALoopbackSoC(BaseSoC):
     csr_peripherals = {
         "analyzer"
     }
@@ -571,10 +572,79 @@ class VideoRawSoC(BaseSoC):
     def do_exit(self, vns):
         self.analyzer.export_csv(vns, "test/analyzer.csv")
 
+
+class VideoRawDirectLoopbackSoC(BaseSoC):
+    csr_peripherals = {
+        "hdmi_out0",
+        "hdmi_in0",
+        "hdmi_in0_freq",
+        "hdmi_in0_edid_mem",
+        "analyzer"
+    }
+    csr_map_update(BaseSoC.csr_map, csr_peripherals)
+
+    def __init__(self, platform, *args, **kwargs):
+        BaseSoC.__init__(self, platform, *args, **kwargs)
+
+        # # #
+
+        pix_freq = 148.50e6
+
+        # hdmi in
+        hdmi_in0_pads = platform.request("hdmi_in", 0)
+        self.submodules.hdmi_in0_freq = FrequencyMeter(period=self.clk_freq)
+        self.submodules.hdmi_in0 = HDMIIn(hdmi_in0_pads,
+                                         fifo_depth=512,
+                                         device="xc7")
+        self.comb += self.hdmi_in0_freq.clk.eq(self.hdmi_in0.clocking.cd_pix.clk)
+        self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix.clk, period_ns(1*pix_freq))
+        self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix1p25x.clk, period_ns(1.25*pix_freq))
+        self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix5x.clk, period_ns(5*pix_freq))
+
+        self.platform.add_false_path_constraints(
+            self.crg.cd_sys.clk,
+            self.hdmi_in0.clocking.cd_pix.clk,
+            self.hdmi_in0.clocking.cd_pix1p25x.clk,
+            self.hdmi_in0.clocking.cd_pix5x.clk)
+
+        # hdmi out
+        hdmi_out0_pads = platform.request("hdmi_out", 0)
+        self.submodules.hdmi_out0_clk_gen = S7HDMIOutEncoderSerializer(hdmi_out0_pads.clk_p, hdmi_out0_pads.clk_n, bypass_encoder=True)
+        self.comb += self.hdmi_out0_clk_gen.data.eq(Signal(10, reset=0b0000011111))
+        self.submodules.hdmi_out0_phy = S7HDMIOutPHY(hdmi_out0_pads, mode="raw")
+
+        self.sync += [
+            self.hdmi_out0_phy.sink.c0.eq(self.hdmi_in0.syncpol.c0),
+            self.hdmi_out0_phy.sink.c1.eq(self.hdmi_in0.syncpol.c1),
+            self.hdmi_out0_phy.sink.c2.eq(self.hdmi_in0.syncpol.c2),
+        ]
+
+        # hdmi over
+        self.comb += [
+            platform.request("hdmi_sda_over_up").eq(0),
+            platform.request("hdmi_sda_over_dn").eq(0),
+        ]
+
+        # analyzer
+        from litex.soc.cores.uart import UARTWishboneBridge
+        from litescope import LiteScopeAnalyzer
+
+        self.submodules.bridge = UARTWishboneBridge(
+            platform.request("serial_litescope"), self.clk_freq, baudrate=115200)
+        self.add_wb_master(self.bridge.wishbone)
+
+        analyzer_signals = [
+            Signal(2)
+        ]
+        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 2048, cd="pix", cd_ratio=2)
+
+    def do_exit(self, vns):
+        self.analyzer.export_csv(vns, "test/analyzer.csv")
+
 def main():
     platform = Platform()
     if len(sys.argv) < 2:
-        print("missing target (base or pcie or video or video_raw)")
+        print("missing target (base or pcie or video or video_raw_dma_loooback or video_raw_direct_loopback)")
         exit()
     if sys.argv[1] == "base":
         soc = BaseSoC(platform)
@@ -582,8 +652,10 @@ def main():
         soc = PCIeSoC(platform)
     elif sys.argv[1] == "video":
         soc = VideoSoC(platform)
-    elif sys.argv[1] == "video_raw":
-        soc = VideoRawSoC(platform)
+    elif sys.argv[1] == "video_raw_dma_loooback":
+        soc = VideoRawDMALoopbackSoC(platform)
+    elif sys.argv[1] == "video_raw_direct_loopback":
+        soc = VideoRawDirectLoopbackSoC(platform)
     builder = Builder(soc, output_dir="build", csr_csv="test/csr.csv")
     vns = builder.build()
     soc.do_exit(vns)
