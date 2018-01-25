@@ -73,6 +73,22 @@ static void help_encoder(void)
 }
 #endif
 
+#ifdef DMA_WRITER_BASE
+static void help_dma_writer(void)
+{
+	wputs("dma_writer on                  - enable dma_writer");
+	wputs("dma_writer off                 - disable dma_writer");
+}
+#endif
+
+#ifdef DMA_READER_BASE
+static void help_dma_reader(void)
+{
+	wputs("dma_reader on                  - enable dma_reader");
+	wputs("dma reader off                 - disable dma_reader");
+}
+#endif
+
 static void help_debug(void)
 {
 	wputs("debug mmcm                     - dump mmcm configuration");
@@ -644,6 +660,34 @@ void ci_service(void)
 			encoder_configure_fps(atoi(get_token(&str)));
 		else
 			help_encoder();
+	}
+#endif
+#ifdef DMA_WRITER_BASE
+	else if(strcmp(token, "dma_writer") == 0) {
+		token = get_token(&str);
+		if(strcmp(token, "on") == 0) {
+			dma_writer_enable_write(1);
+			dma_writer_start_write(1);
+			wprintf("dma_writer on\n");
+		} else if(strcmp(token, "off") == 0) {
+			dma_writer_enable_write(0);
+			dma_writer_start_write(0);
+			wprintf("dma_writer off\n");
+		}
+	}
+#endif
+#ifdef DMA_READER_BASE
+	else if(strcmp(token, "dma_reader") == 0) {
+		token = get_token(&str);
+		if(strcmp(token, "on") == 0) {
+			dma_reader_enable_write(1);
+			dma_reader_start_write(1);
+			wprintf("dma_reader on\n");
+		} else if(strcmp(token, "off") == 0) {
+			dma_reader_enable_write(0);
+			dma_reader_start_write(0);
+			wprintf("dma_reader off\n");
+		}
 	}
 #endif
 	else if(strcmp(token, "status") == 0) {

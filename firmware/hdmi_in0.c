@@ -36,6 +36,7 @@ static int hdmi_in0_hres, hdmi_in0_vres;
 
 extern void processor_update(void);
 
+#ifdef HDMI_IN0_INTERRUPT
 void hdmi_in0_isr(void)
 {
 	int fb_index = -1;
@@ -102,6 +103,7 @@ void hdmi_in0_isr(void)
 		hdmi_in0_fb_index = fb_index;
 	processor_update();
 }
+#endif
 
 static int hdmi_in0_connected;
 static int hdmi_in0_locked;
@@ -114,6 +116,7 @@ void hdmi_in0_init_video(int hres, int vres)
 	hdmi_in0_connected = hdmi_in0_locked = 0;
 	hdmi_in0_hres = hres; hdmi_in0_vres = vres;
 
+#ifdef  HDMI_IN0_INTERRUPT
 	hdmi_in0_dma_frame_size_write(hres*vres*2);
 	hdmi_in0_fb_slot_indexes[0] = 0;
 	hdmi_in0_dma_slot0_address_write(hdmi_in0_framebuffer_base(0));
@@ -130,10 +133,12 @@ void hdmi_in0_init_video(int hres, int vres)
 	irq_setmask(mask);
 
 	hdmi_in0_fb_index = 3;
+#endif
 }
 
 void hdmi_in0_disable(void)
 {
+#ifdef HDMI_IN0_INTERRUPT
 	unsigned int mask;
 
 	mask = irq_getmask();
@@ -142,6 +147,7 @@ void hdmi_in0_disable(void)
 
 	hdmi_in0_dma_slot0_status_write(DVISAMPLER_SLOT_EMPTY);
 	hdmi_in0_dma_slot1_status_write(DVISAMPLER_SLOT_EMPTY);
+#endif
 	hdmi_in0_clocking_mmcm_reset_write(1);
 }
 
@@ -296,10 +302,12 @@ int hdmi_in0_phase_startup(freq)
 
 static void hdmi_in0_check_overflow(void)
 {
+#ifdef HDMI_IN0_INTERRUPT
 	if(hdmi_in0_frame_overflow_read()) {
 		printf("dvisampler0: FIFO overflow\r\n");
 		hdmi_in0_frame_overflow_write(1);
 	}
+#endif
 }
 
 static int hdmi_in0_clocking_locked_filtered(void)
