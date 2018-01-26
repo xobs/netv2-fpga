@@ -527,7 +527,7 @@ class VideoRawLoopbackSoC(BaseSoC):
         ]
 
         # hdmi in to hdmi out
-        self.sync += [
+        self.comb += [
             self.hdmi_out0_phy.sink.c0.eq(self.hdmi_in0.syncpol.c0),
             self.hdmi_out0_phy.sink.c1.eq(self.hdmi_in0.syncpol.c1),
             self.hdmi_out0_phy.sink.c2.eq(self.hdmi_in0.syncpol.c2),
