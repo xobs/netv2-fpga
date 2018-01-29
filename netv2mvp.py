@@ -637,7 +637,7 @@ class VideoRawDMALoopbackSoC(BaseSoC):
 def main():
     platform = Platform()
     if len(sys.argv) < 2:
-        print("missing target (base or pcie or video or video_loooback or video_raw_dma_loopback)")
+        print("missing target (base or pcie or video or video_raw_loopback or video_raw_dma_loopback)")
         exit()
     if sys.argv[1] == "base":
         soc = BaseSoC(platform)
