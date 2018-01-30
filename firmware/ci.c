@@ -73,7 +73,7 @@ static void help_encoder(void)
 }
 #endif
 
-#ifdef DMA_WRITER_BASE
+#ifdef CSR_DMA_WRITER_BASE
 static void help_dma_writer(void)
 {
 	wputs("dma_writer on                  - enable dma_writer");
@@ -81,7 +81,7 @@ static void help_dma_writer(void)
 }
 #endif
 
-#ifdef DMA_READER_BASE
+#ifdef CSR_DMA_READER_BASE
 static void help_dma_reader(void)
 {
 	wputs("dma_reader on                  - enable dma_reader");
@@ -122,6 +122,14 @@ static void ci_help(void)
 #endif
 #ifdef ENCODER_BASE
 	help_encoder();
+	wputs("");
+#endif
+#ifdef CSR_DMA_WRITER_BASE
+	help_dma_writer();
+	wputs("");
+#endif
+#ifdef CSR_DMA_READER_BASE
+	help_dma_reader();
 	wputs("");
 #endif
 	help_debug();
@@ -662,7 +670,7 @@ void ci_service(void)
 			help_encoder();
 	}
 #endif
-#ifdef DMA_WRITER_BASE
+#ifdef CSR_DMA_WRITER_BASE
 	else if(strcmp(token, "dma_writer") == 0) {
 		token = get_token(&str);
 		if(strcmp(token, "on") == 0) {
@@ -676,7 +684,7 @@ void ci_service(void)
 		}
 	}
 #endif
-#ifdef DMA_READER_BASE
+#ifdef CSR_DMA_READER_BASE
 	else if(strcmp(token, "dma_reader") == 0) {
 		token = get_token(&str);
 		if(strcmp(token, "on") == 0) {

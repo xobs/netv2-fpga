@@ -34,14 +34,21 @@ class DMA(Module):
 
         # # #
 
+        base = Signal(dram_port.aw)
+        length = Signal(dram_port.aw)
+        offset = Signal(dram_port.aw)
+
         # slot selection
-        base = Signal(awidth)
         self.comb += \
             If(self.slot,
-                base.eq(self.slot1_base)
+                base.eq(self.slot1_base[ashift:])
             ).Else(
-                base.eq(self.slot0_base))
+                base.eq(self.slot0_base[ashift:]))
 
+        # length
+        self.comb += length.eq(self.length[ashift:])
+
+        # dma
         if mode == "write":
             # dma
             self.submodules.dma = dma = ResetInserter()(LiteDRAMDMAWriter(dram_port, fifo_depth))
@@ -58,12 +65,11 @@ class DMA(Module):
             ]
 
         # control
-        count = Signal(awidth)
         self.submodules.fsm = fsm = FSM(reset_state="IDLE")
         fsm.act("IDLE",
             self.idle.eq(1),
             If(self.enable & self.start,
-                NextValue(count, 0),
+                NextValue(offset, 0),
                 NextState("RUN")
             )
         )
@@ -79,14 +85,14 @@ class DMA(Module):
                 dram_port.flush.eq(1),
                 NextState("IDLE")
             ).Elif(dma.sink.valid & dma.sink.ready,
-                NextValue(count, count + 4),
-                If(count == (self.length - 4),
-                    NextValue(count, 0),
+                NextValue(offset, offset + 1),
+                If(offset == (length - 1),
+                    NextValue(offset, 0),
                     NextValue(self.slot, ~self.slot)
                 )
             )
         )
-        self.comb += dma.sink.address.eq(base[ashift:] + count[ashift:])
+        self.comb += dma.sink.address.eq(base + offset)
 
 
 class DMAWriter(DMA):

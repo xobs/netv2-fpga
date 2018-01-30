@@ -35,18 +35,18 @@ int main(void)
 	processor_update();
 	processor_start(config_get(CONFIG_KEY_RESOLUTION));
 
-#ifdef DMA_WRITER_BASE
+#ifdef CSR_DMA_WRITER_BASE
 	// do it here to be sure values are stabilized when we'll use them
-	dma_writer_slot0_base_write(0x00000000);
-	dma_writer_slot0_base_write(0x10000000);
-	dma_writer_length_write(1920*1080*32);
+	dma_writer_slot0_base_write(MAIN_RAM_BASE + 0x1000000);
+	dma_writer_slot1_base_write(MAIN_RAM_BASE + 0x2000000);
+	dma_writer_length_write(2200*1125*4);
 #endif
 
-#ifdef DMA_READER_BASE
+#ifdef CSR_DMA_READER_BASE
 	// do it here to be sure values are stabilized when we'll use them
-	dma_reader_slot0_base_write(0x00000000);
-	dma_reader_slot0_base_write(0x10000000);
-	dma_reader_length_write(1920*1080*32);
+	dma_reader_slot0_base_write(MAIN_RAM_BASE + 0x1000000);
+	dma_reader_slot1_base_write(MAIN_RAM_BASE + 0x2000000);
+	dma_reader_length_write(2200*1125*4);
 #endif
 
 	ci_prompt();
