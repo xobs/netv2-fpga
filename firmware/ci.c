@@ -298,6 +298,12 @@ static void status_print(void)
 	wprintf("ddr: ");
 	debug_ddr();
 #endif
+#ifdef CSR_DMA_WRITER_BASE
+	wprintf("DMA_WRITER overflows: %d\n", dma_writer_overflows_read());
+#endif
+#ifdef CSR_DMA_READER_BASE
+	wprintf("DMA_READER underflows: %d\n", dma_reader_underflows_read());
+#endif
 }
 
 static void status_service(void)

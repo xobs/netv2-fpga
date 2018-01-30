@@ -132,7 +132,7 @@ _io = [
         Subsignal("data1_n", Pins("AB20"), IOStandard("TMDS_33"), Inverted()),
         Subsignal("data2_p", Pins("AB21"), IOStandard("TMDS_33"), Inverted()),
         Subsignal("data2_n", Pins("AB22"), IOStandard("TMDS_33"), Inverted()),
-        Subsignal("scl", Pins("W17"), IOStandard("LVCMOS33")),
+        Subsignal("scl", Pins("W17"), IOStandard("LVCMOS33"), Inverted()),
         Subsignal("sda", Pins("R17"), IOStandard("LVCMOS33")),
     ),
 
@@ -297,8 +297,8 @@ class BaseSoC(SoCSDRAM):
     def __init__(self, platform, **kwargs):
         clk_freq = int(100e6)
         SoCSDRAM.__init__(self, platform, clk_freq,
-            integrated_rom_size=0x8000,
-            integrated_sram_size=0x8000,
+            integrated_rom_size=0x6000,
+            integrated_sram_size=0x4000,
             #shadow_base=0x00000000,
             ident="NeTV2 LiteX Base SoC",
             reserve_nmi_interrupt=False,
@@ -321,7 +321,7 @@ class BaseSoC(SoCSDRAM):
                             sdram_module.timing_settings,
                             controller_settings=ControllerSettings(with_bandwidth=True,
                                                                    cmd_buffer_depth=8,
-                                                                   with_refresh=True))
+                                                                   with_refresh=False))
 
         # common led
         self.sys_led = Signal()
@@ -500,9 +500,7 @@ class VideoRawLoopbackSoC(BaseSoC):
         # hdmi in
         hdmi_in0_pads = platform.request("hdmi_in", 0)
         self.submodules.hdmi_in0_freq = FrequencyMeter(period=self.clk_freq)
-        self.submodules.hdmi_in0 = HDMIIn(hdmi_in0_pads,
-                                         fifo_depth=512,
-                                         device="xc7")
+        self.submodules.hdmi_in0 = HDMIIn(hdmi_in0_pads, device="xc7")
         self.comb += self.hdmi_in0_freq.clk.eq(self.hdmi_in0.clocking.cd_pix.clk)
         self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix.clk, period_ns(1*pix_freq))
         self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix1p25x.clk, period_ns(1.25*pix_freq))
@@ -555,9 +553,7 @@ class VideoRawDMALoopbackSoC(BaseSoC):
         # hdmi in
         hdmi_in0_pads = platform.request("hdmi_in", 0)
         self.submodules.hdmi_in0_freq = FrequencyMeter(period=self.clk_freq)
-        self.submodules.hdmi_in0 = HDMIIn(hdmi_in0_pads,
-                                         fifo_depth=512,
-                                         device="xc7")
+        self.submodules.hdmi_in0 = HDMIIn(hdmi_in0_pads, device="xc7")
         self.comb += self.hdmi_in0_freq.clk.eq(self.hdmi_in0.clocking.cd_pix.clk)
         self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix.clk, period_ns(1*pix_freq))
         self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix1p25x.clk, period_ns(1.25*pix_freq))
@@ -582,9 +578,9 @@ class VideoRawDMALoopbackSoC(BaseSoC):
         ]
 
         # dram dmas
-        dma_writer = DMAWriter(self.sdram.crossbar.get_port(mode="write", dw=32, cd="pix"))
+        dma_writer = DMAWriter(self.sdram.crossbar.get_port(mode="write", cd="pix"))
         dma_writer = ClockDomainsRenamer("pix")(dma_writer)
-        dma_reader = DMAReader(self.sdram.crossbar.get_port(mode="read", dw=32, cd="pix"))
+        dma_reader = DMAReader(self.sdram.crossbar.get_port(mode="read", cd="pix"))
         dma_reader = ClockDomainsRenamer("pix")(dma_reader)
         self.submodules += dma_writer, dma_reader
         self.submodules.dma_writer = DMAControl(dma_writer)

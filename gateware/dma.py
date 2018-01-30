@@ -26,11 +26,7 @@ class DMA(Module):
         self.length = Signal(awidth)     # in bytes
 
         # stream
-        endpoint = stream.Endpoint([("data", dram_port.dw)])
-        if mode == "write":
-            self.sink = endpoint
-        elif mode == "read":
-            self.source = endpoint
+        self.endpoint = endpoint = stream.Endpoint([("data", dram_port.dw)])
 
         # # #
 
@@ -51,12 +47,12 @@ class DMA(Module):
         # dma
         if mode == "write":
             # dma
-            self.submodules.dma = dma = ResetInserter()(LiteDRAMDMAWriter(dram_port, fifo_depth))
+            self.submodules.dma = dma = ResetInserter()(LiteDRAMDMAWriter(dram_port, fifo_depth, True))
             # data
             self.comb += dma.sink.data.eq(endpoint.data)
         elif mode == "read":
             # dma
-            self.submodules.dma = dma = ResetInserter()(LiteDRAMDMAReader(dram_port, fifo_depth))
+            self.submodules.dma = dma = ResetInserter()(LiteDRAMDMAReader(dram_port, fifo_depth, True))
             # data
             self.comb += [
                 endpoint.valid.eq(dma.source.valid),
@@ -97,12 +93,32 @@ class DMA(Module):
 
 class DMAWriter(DMA):
     def __init__(self, dram_port, fifo_depth=512):
+        self.sink = stream.Endpoint([("data", 32)])
+
+        # # #
+
         DMA.__init__(self, "write", dram_port, fifo_depth)
+        converter = stream.Converter(32, dram_port.dw, reverse=False)
+        self.submodules += converter
+        self.comb += [
+            self.sink.connect(converter.sink),
+            converter.source.connect(self.endpoint)
+        ]
 
 
 class DMAReader(DMA):
     def __init__(self, dram_port, fifo_depth=512):
+        self.source = stream.Endpoint([("data", 32)])
+
+        # # #
+
         DMA.__init__(self, "read", dram_port, fifo_depth)
+        converter = stream.Converter(dram_port.dw, 32, reverse=False)
+        self.submodules += converter
+        self.comb += [
+            self.endpoint.connect(converter.sink),
+            converter.source.connect(self.source)
+        ]
 
 
 class DMAControl(DMA, AutoCSR):
@@ -134,3 +150,14 @@ class DMAControl(DMA, AutoCSR):
             start_sync.i.eq(self.start.re),
             dma.start.eq(start_sync.o)
         ]
+
+        if hasattr(dma, "source"):
+            self.underflows = CSRStatus(32)
+            self.sync.pix += [
+                If(~dma.source.valid, self.underflows.status.eq(self.underflows.status + 1))
+            ]
+        if hasattr(dma, "sink"):
+            self.overflows = CSRStatus(32)
+            self.sync.pix += [
+                If(~dma.sink.ready, self.overflows.status.eq(self.overflows.status + 1))
+            ]
