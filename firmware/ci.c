@@ -148,6 +148,7 @@ static void ci_help(void)
 
 	help_memread();
 	help_memwrite();
+	wputs("");
 
 	help_debug();
 }
