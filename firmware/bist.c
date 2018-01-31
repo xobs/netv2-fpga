@@ -10,7 +10,7 @@
 #include "ci.h"
 
 
-#define test_size 64*1024*1024
+#define test_size 128*1024*1024
 
 unsigned int ticks;
 unsigned int speed;
@@ -26,12 +26,17 @@ static void busy_wait(unsigned int ds)
 }
 
 void bist_test(void) {
+  // empty any characters pending
+  while(readchar_nonblock() != 0) {
+    printf( "readchar_nonblock(): %d\n", readchar_nonblock() );
+    printf( "emptying buffer: %02x\n", (unsigned int) uart_read() );
+  }
 	while(readchar_nonblock() == 0) {
 			// write
 			printf("writing %d Mbytes...", test_size/(1024*1024));
 			generator_reset_write(1);
 			generator_reset_write(0);
-			generator_base_write(0x10000);
+			generator_base_write(0x20000);
 			generator_length_write((test_size*8)/128);
 
 			timer0_en_write(0);
@@ -53,7 +58,7 @@ void bist_test(void) {
 			printf("reading %d Mbytes...", test_size/(1024*1024));
 			checker_reset_write(1);
 			checker_reset_write(0);
-			checker_base_write(0x10000);
+			checker_base_write(0x20000);
 			checker_length_write((test_size*8)/128);
 
 			timer0_en_write(0);

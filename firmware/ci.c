@@ -19,7 +19,8 @@
 #include "ci.h"
 #include "encoder.h"
 #include "hdmi_out0.h"
-
+#include "bist.h"
+#include "dump.h"
 
 int status_enabled;
 
@@ -89,6 +90,14 @@ static void help_dma_reader(void)
 }
 #endif
 
+#ifdef CSR_GENERATOR_BASE
+static void help_sdram_test(void)
+{
+	wputs("sdram_test                     - Run SDRAM BIST checker");
+
+}
+#endif
+
 static void help_debug(void)
 {
 	wputs("debug mmcm                     - dump mmcm configuration");
@@ -132,6 +141,15 @@ static void ci_help(void)
 	help_dma_reader();
 	wputs("");
 #endif
+#ifdef CSR_GENERATOR_BASE
+	help_sdram_test();
+	wputs("");
+#endif
+
+	help_memread();
+	help_memwrite();
+	wputs("");
+
 	help_debug();
 }
 
@@ -676,6 +694,11 @@ void ci_service(void)
 			help_encoder();
 	}
 #endif
+#ifdef CSR_GENERATOR_BASE
+	else if(strcmp(token, "sdram_test") == 0) {
+	  bist_test();
+	}
+#endif
 #ifdef CSR_DMA_WRITER_BASE
 	else if(strcmp(token, "dma_writer") == 0) {
 		token = get_token(&str);
@@ -704,6 +727,31 @@ void ci_service(void)
 		}
 	}
 #endif
+
+	else if(strcmp(token, "mr") == 0 ) {
+	  unsigned int addr, len;
+	  char *str2;
+	  token = get_token(&str);
+	  addr = strtoul(token, NULL, 0);
+	  str2 = str;
+	  token = get_token(&str);
+	  if( str == str2 ) {
+	    len = 1;
+	  } else {
+	    len = strtoul(token, NULL, 0);
+	  }
+	  dump_mem(addr, len);
+	}
+
+	else if(strcmp(token, "mw") == 0 ) {
+	  unsigned int addr, data;
+	  token = get_token(&str);
+	  addr = strtoul(token, NULL, 0);
+	  token = get_token(&str);
+	  data = strtoul(token, NULL, 0);
+	  poke_mem(addr, data);
+	}
+
 	else if(strcmp(token, "status") == 0) {
 		token = get_token(&str);
 		if(strcmp(token, "on") == 0)
