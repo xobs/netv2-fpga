@@ -25,6 +25,7 @@ int hdmi_in0_fb_index;
 
 //#define CLEAN_COMMUTATION
 //#define DEBUG
+int got_zero = 0;
 
 unsigned int hdmi_in0_framebuffer_base(char n) {
 	return HDMI_IN0_FRAMEBUFFERS_BASE + n*HDMI_IN0_FRAMEBUFFERS_SIZE;
@@ -349,15 +350,30 @@ void hdmi_in0_service(int freq)
 			if(hdmi_in0_locked) {
 				if(hdmi_in0_clocking_locked_filtered()) {
 					if(elapsed(&last_event, SYSTEM_CLOCK_FREQUENCY/2)) {
-						hdmi_in0_adjust_phase();
-						if(hdmi_in0_debug)
-							hdmi_in0_print_status();
+					  hdmi_in0_data0_wer_update_write(1);
+					  hdmi_in0_data1_wer_update_write(1);
+					  hdmi_in0_data2_wer_update_write(1);
+					  if( hdmi_in0_data0_wer_value_read() + hdmi_in0_data1_wer_value_read() +
+					      hdmi_in0_data2_wer_value_read() == 0 ) {
+					    got_zero = 1;
+					  } else if( hdmi_in0_data0_wer_value_read() + hdmi_in0_data1_wer_value_read() +
+						     hdmi_in0_data2_wer_value_read() > 10 ) {
+					    got_zero = 0;
+					  }
+
+					  if(hdmi_in0_debug)
+					    hdmi_in0_print_status();
+					  
+					  if( got_zero != 1 ) {
+					    hdmi_in0_adjust_phase();
+					  }
 					}
 				} else {
 					if(hdmi_in0_debug)
 						printf("dvisampler0: lost PLL lock\r\n");
 					hdmi_in0_locked = 0;
 					hdmi_in0_clear_framebuffers();
+					got_zero = 0;
 				}
 			} else {
 				if(hdmi_in0_clocking_locked_filtered()) {

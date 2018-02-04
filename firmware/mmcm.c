@@ -38,6 +38,22 @@ int hdmi_in0_clocking_mmcm_read(int adr) {
 	return hdmi_in0_clocking_mmcm_dat_r_read();
 }
 
+#ifdef CSR_HDMI_IN0_CLOCKING_MMCM_DRDY_O_ADDR
+void hdmi_in0_clocking_mmcm_write_o(int adr, int data) {
+	hdmi_in0_clocking_mmcm_adr_write(adr);
+	hdmi_in0_clocking_mmcm_dat_w_write(data);
+	hdmi_in0_clocking_mmcm_write_o_write(1);
+	while(!hdmi_in0_clocking_mmcm_drdy_o_read());
+}
+
+int hdmi_in0_clocking_mmcm_read_o(int adr) {
+	hdmi_in0_clocking_mmcm_adr_write(adr);
+	hdmi_in0_clocking_mmcm_read_o_write(1);
+	while(!hdmi_in0_clocking_mmcm_drdy_o_read());
+	return hdmi_in0_clocking_mmcm_dat_o_r_read();
+}
+#endif
+
 static void hdmi_in_0_config_30_60mhz(void) {
 	hdmi_in0_clocking_mmcm_write(0x14, 0x1000 | (10<<6) | 10); /* clkfbout_mult  = 20 */
 	hdmi_in0_clocking_mmcm_write(0x08, 0x1000 | (10<<6) | 10); /* clkout0_divide = 20 */
@@ -52,6 +68,16 @@ static void hdmi_in_0_config_60_120mhz(void) {
 	hdmi_in0_clocking_mmcm_write(0x0a, 0x1000 |  (4<<6) | 4); /* clkout1_divide =  8 */
 	hdmi_in0_clocking_mmcm_write(0x0c, 0x1000 |  (1<<6) | 1); /* clkout2_divide =  2 */
 	hdmi_in0_clocking_mmcm_write(0x0d, 0);                    /* clkout2_divide =  2 */
+
+#ifdef CSR_HDMI_IN0_CLOCKING_MMCM_DRDY_O_ADDR
+	hdmi_in0_clocking_mmcm_write_o(0x14, 0x1000 |  (2<<6) | 3);  /* clkfbout_mult  = 5 (2/3) */
+	hdmi_in0_clocking_mmcm_write_o(0x15, 1 << 7);                /* clkfbout_mult  = 5 (edge = 1) */
+	hdmi_in0_clocking_mmcm_write_o(0x08, 0x1000 |  (2<<6) | 3);  /* clkout0_divide = 5 (2/3) */
+	hdmi_in0_clocking_mmcm_write_o(0x09, 1 << 7);                /* clkout0_divide = 5 (edge = 1) */
+	hdmi_in0_clocking_mmcm_write_o(0x0a, 0x1000 |  (2<<6) | 2);  /* clkout1_divide = 4 */
+	hdmi_in0_clocking_mmcm_write_o(0x0c, 0x1000 |  (0<<6) | 0);  /* clkout2_divide = 1 */
+	hdmi_in0_clocking_mmcm_write_o(0x0d, (1<<6));                /* clkout2_divide = 1 */
+#endif
 }
 
 static void hdmi_in_0_config_120_240mhz(void) {
@@ -62,6 +88,16 @@ static void hdmi_in_0_config_120_240mhz(void) {
 	hdmi_in0_clocking_mmcm_write(0x0a, 0x1000 |  (2<<6) | 2);  /* clkout1_divide = 4 */
 	hdmi_in0_clocking_mmcm_write(0x0c, 0x1000 |  (0<<6) | 0);  /* clkout2_divide = 1 */
 	hdmi_in0_clocking_mmcm_write(0x0d, (1<<6));                /* clkout2_divide = 1 */
+
+#ifdef CSR_HDMI_IN0_CLOCKING_MMCM_DRDY_O_ADDR
+	hdmi_in0_clocking_mmcm_write_o(0x14, 0x1000 |  (2<<6) | 3);  /* clkfbout_mult  = 5 (2/3) */
+	hdmi_in0_clocking_mmcm_write_o(0x15, 1 << 7);                /* clkfbout_mult  = 5 (edge = 1) */
+	hdmi_in0_clocking_mmcm_write_o(0x08, 0x1000 |  (2<<6) | 3);  /* clkout0_divide = 5 (2/3) */
+	hdmi_in0_clocking_mmcm_write_o(0x09, 1 << 7);                /* clkout0_divide = 5 (edge = 1) */
+	hdmi_in0_clocking_mmcm_write_o(0x0a, 0x1000 |  (2<<6) | 2);  /* clkout1_divide = 4 */
+	hdmi_in0_clocking_mmcm_write_o(0x0c, 0x1000 |  (0<<6) | 0);  /* clkout2_divide = 1 */
+	hdmi_in0_clocking_mmcm_write_o(0x0d, (1<<6));                /* clkout2_divide = 1 */
+#endif
 }
 
 void mmcm_config_for_clock(int freq)
@@ -84,186 +120,189 @@ void mmcm_config_for_clock(int freq)
 #endif
 
 void mmcm_decode_clkreg1(unsigned int data) {
-  printf( "  0x%x: phase mux", (data >> 13) & 0x7 );
-  printf( " 0x%x: reserved", (data >> 12) & 0x1 );
-  printf( " 0x%x: high time", (data >> 6) & 0x3F );
-  printf( " 0x%x: low time\n", (data >> 0) & 0x3F );
+  printf( "  phase mux:0x%x", (data >> 13) & 0x7 );
+  printf( " (r):0x%x", (data >> 12) & 0x1 );
+  printf( " high time:0x%x", (data >> 6) & 0x3F );
+  printf( " low time:0x%x", (data >> 0) & 0x3F );
 }
 
 void mmcm_decode_clkreg2(unsigned int data) {
-  printf( "  as int:" );
-  printf( " 0x%x: reserved", (data >> 15) & 0x1 );
-  printf( " 0x%x: frac", (data >> 12) & 0x7 );
-  printf( " 0x%x: frac_en", (data >> 11) & 0x1 );
-  printf( " 0x%x: frac_wf_r\n", (data >> 10) & 0x1 );
-  
-  printf( "  as frac:" );
-  printf( " 0x%x: reserved", (data >> 14) & 0x3 );
-  printf( " 0x%x: phase_mux_f_clkout0", (data >> 11) & 0x7 );
-  printf( " 0x%x: frac_wf_f_clkout0\n", (data >> 10) & 0x1 );
-  
   printf( "  both:" );
-  printf( " 0x%x: mx", (data >> 8) & 0x3 );
-  printf( " 0x%x: edge", (data >> 7) & 0x1 );
-  printf( " 0x%x: no count", (data >> 6) & 0x1 );
-  printf( " 0x%x: delay time\n", (data >> 0) & 0x3F );
+  printf( " mx:0x%x", (data >> 8) & 0x3 );
+  printf( " edge:0x%x", (data >> 7) & 0x1 );
+  printf( " no count:0x%x", (data >> 6) & 0x1 );
+  printf( " delay time:0x%x | ", (data >> 0) & 0x3F );
+
+  printf( "  int:" );
+  printf( " (r):0x%x", (data >> 15) & 0x1 );
+  printf( " frac:0x%x", (data >> 12) & 0x7 );
+  printf( " frac_en:0x%x", (data >> 11) & 0x1 );
+  printf( " frac_wf_r:0x%x | ", (data >> 10) & 0x1 );
+  
+  printf( "  frac:" );
+  printf( " (r):0x%x", (data >> 14) & 0x3 );
+  printf( " phase_mux_f_clkout0:0x%x", (data >> 11) & 0x7 );
+  printf( " frac_wf_f_clkout0:0x%x\n", (data >> 10) & 0x1 );
 }
 
 void mmcm_decode_divreg(unsigned int data) {
-  printf( "  0x%x: reserved", (data >> 14) & 0x3 );
-  printf( " 0x%x: edge", (data >> 13) & 0x1 );
-  printf( " 0x%x: no count", (data >> 12) & 0x1 );
-  printf( " 0x%x: high time", (data >> 6) & 0x3f );
-  printf( " 0x%x: low time\n", (data >> 0) & 0x3f );
+  printf( "  (r):0x%x", (data >> 14) & 0x3 );
+  printf( " edge:0x%x", (data >> 13) & 0x1 );
+  printf( " no count:0x%x", (data >> 12) & 0x1 );
+  printf( " high time:0x%x", (data >> 6) & 0x3f );
+  printf( " low time:0x%x\n", (data >> 0) & 0x3f );
 }
 
 void mmcm_decode_lockreg1(unsigned int data) {
-  printf( "  0x%x: reserved", (data >> 10) & 0x3f );
-  printf( " 0x%x: lktable[29:0]\n", (data >> 0) & 0x3FF );
+  printf( "  (r):0x%x", (data >> 10) & 0x3f );
+  printf( " lktable[29:0]:0x%x\n", (data >> 0) & 0x3FF );
 }
 
 void mmcm_decode_lockreg2(unsigned int data) {
-  printf( "  0x%x: reserved", (data >> 15) & 0x1 );
-  printf( " 0x%x: lktable[34:30]", (data >> 10) & 0x1F );
-  printf( " 0x%x: lktable[9:0]\n", (data >> 0) & 0x3FFF );
+  printf( "  (r):0x%x", (data >> 15) & 0x1 );
+  printf( " lktable[34:30]:0x%x", (data >> 10) & 0x1F );
+  printf( " lktable[9:0]:0x%x\n", (data >> 0) & 0x3FFF );
 }
 
 void mmcm_decode_lockreg3(unsigned int data) {
-  printf( "  0x%x: reserved", (data >> 15) & 0x1 );
-  printf( " 0x%x: lktable[39:35]", (data >> 10) & 0x1F );
-  printf( " 0x%x: lktable[19:10]\n", (data >> 0) & 0x3FFF );
+  printf( "  (r):0x%x", (data >> 15) & 0x1 );
+  printf( " lktable[39:35]:0x%x", (data >> 10) & 0x1F );
+  printf( " lktable[19:10]:0x%x\n", (data >> 0) & 0x3FFF );
 }
 
 void mmcm_decode_filtreg1(unsigned int data) {
-  printf( "  0x%x: table[9]", (data >> 15) & 0x1 );
-  printf( " 0x%x: reserved", (data >> 13) & 0x3 );
-  printf( " 0x%x: table[8:7]", (data >> 11) & 0x3 );
-  printf( " 0x%x: reserved", (data >> 9) & 0x3 );
-  printf( " 0x%x: table[6]", (data >> 8) & 0x1 );
-  printf( " 0x%x: reserved", (data >> 0) & 0xFF );
+  printf( "  table[9]:0x%x", (data >> 15) & 0x1 );
+  printf( " (r):0x%x", (data >> 13) & 0x3 );
+  printf( " table[8:7]:0x%x", (data >> 11) & 0x3 );
+  printf( " (r):0x%x", (data >> 9) & 0x3 );
+  printf( " table[6]:0x%x", (data >> 8) & 0x1 );
+  printf( " (r):0x%x\n", (data >> 0) & 0xFF );
 }
 
 void mmcm_decode_filtreg2(unsigned int data) {
-  printf( "  0x%x: table[5]", (data >> 15) & 0x1 );
-  printf( " 0x%x: reserved", (data >> 13) & 0x3 );
-  printf( " 0x%x: table[4:3]", (data >> 11) & 0x3 );
-  printf( " 0x%x: reserved", (data >> 9) & 0x3 );
-  printf( " 0x%x: table[2:1]", (data >> 7) & 0x3 );
-  printf( " 0x%x: reserved", (data >> 5) & 0x3 );
-  printf( " 0x%x: table[0]", (data >> 4) & 0x1 );
-  printf( " 0x%x: reserved\n", (data >> 5) & 0xF );
+  printf( "  table[5]:0x%x", (data >> 15) & 0x1 );
+  printf( " (r):0x%x", (data >> 13) & 0x3 );
+  printf( " table[4:3]:0x%x", (data >> 11) & 0x3 );
+  printf( " (r):0x%x", (data >> 9) & 0x3 );
+  printf( " table[2:1]:0x%x", (data >> 7) & 0x3 );
+  printf( " (r):0x%x", (data >> 5) & 0x3 );
+  printf( " table[0]:0x%x", (data >> 4) & 0x1 );
+  printf( " (r):0x%x\n", (data >> 5) & 0xF );
 }
 
 void mmcm_decode_power7(unsigned int data) {
-  printf( "  0x%x: power (must be high)\n", data & 0xFFFF );
+  printf( "  power (must be high):0x%x\n", data & 0xFFFF );
 }
 
 void mmcm_decode_reg(unsigned int adr, unsigned int data) {
 
   switch(adr) {
   case 0x6:
-    printf( "\nCLKOUT5 ClkReg1\n" );
+    printf( "\nCLKOUT5 ClkReg1: " );
     mmcm_decode_clkreg1(data);
     break;
   case 0x8:
-    printf( "\nCLKOUT0 ClkReg1\n" );
+    printf( "\nCLKOUT0 ClkReg1: " );
     mmcm_decode_clkreg1(data);
     break;
   case 0xA:
-    printf( "\nCLKOUT1 ClkReg1\n" );
+    printf( "\nCLKOUT1 ClkReg1: " );
     mmcm_decode_clkreg1(data);
     break;
   case 0xC:
-    printf( "\nCLKOUT2 ClkReg1\n" );
+    printf( "\nCLKOUT2 ClkReg1: " );
     mmcm_decode_clkreg1(data);
     break;
   case 0xE:
-    printf( "\nCLKOUT3 ClkReg1\n" );
+    printf( "\nCLKOUT3 ClkReg1: " );
     mmcm_decode_clkreg1(data);
     break;
   case 0x10:
-    printf( "\nCLKOUT4 ClkReg1\n" );
+    printf( "\nCLKOUT4 ClkReg1: " );
     mmcm_decode_clkreg1(data);
     break;
   case 0x12:
-    printf( "\nCLKOUT6 ClkReg1\n" );
+    printf( "\nCLKOUT6 ClkReg1: " );
     mmcm_decode_clkreg1(data);
     break;
   case 0x14:
-    printf( "\nCLKFBOUT ClkReg1\n" );
+    printf( "\nCLKFBOUT ClkReg1: " );
     mmcm_decode_clkreg1(data);
     break;
     
   case 0x7:
-    printf( "\nCLKOUT5 ClkReg2\n" );
+    printf( "\nCLKOUT5 ClkReg2: " );
     mmcm_decode_clkreg2(data);
     break;
   case 0x9:
-    printf( "\nCLKOUT0 ClkReg2\n" );
+    printf( "\nCLKOUT0 ClkReg2: " );
     mmcm_decode_clkreg2(data);
     break;
   case 0xB:
-    printf( "\nCLKOUT1 ClkReg2\n" );
+    printf( "\nCLKOUT1 ClkReg2: " );
     mmcm_decode_clkreg2(data);
     break;
   case 0xD:
-    printf( "\nCLKOUT2 ClkReg2\n" );
+    printf( "\nCLKOUT2 ClkReg2: " );
     mmcm_decode_clkreg2(data);
     break;
   case 0xF:
-    printf( "\nCLKOUT3 ClkReg2\n" );
+    printf( "\nCLKOUT3 ClkReg2: " );
     mmcm_decode_clkreg2(data);
     break;
   case 0x11:
-    printf( "\nCLKOUT4 ClkReg2\n" );
+    printf( "\nCLKOUT4 ClkReg2: " );
     mmcm_decode_clkreg2(data);
     break;
   case 0x13:
-    printf( "\nCLKOUT6 ClkReg2\n" );
+    printf( "\nCLKOUT6 ClkReg2: " );
     mmcm_decode_clkreg2(data);
     break;
   case 0x15:
-    printf( "\nCLKFBOUT ClkReg2\n" );
+    printf( "\nCLKFBOUT ClkReg2: " );
     mmcm_decode_clkreg2(data);
     break;
 
   case 0x16:
-    printf( "\nDivReg\n" );
+    printf( "\nDivReg: " );
     mmcm_decode_divreg(data);
     break;
 
   case 0x18:
-    printf( "\nLockReg1\n" );
+    printf( "\nLockReg1: " );
     mmcm_decode_lockreg1(data);
     break;
 
   case 0x19:
-    printf( "\nLockReg2\n" );
+    printf( "\nLockReg2: " );
     mmcm_decode_lockreg2(data);
     break;
 
   case 0x1A:
-    printf( "\nLockReg3\n" );
+    printf( "\nLockReg3: " );
     mmcm_decode_lockreg3(data);
     break;
 
   case 0x28:
-    printf( "\nPowerReg 7 series\n" );
+    printf( "\nPowerReg 7 series: " );
     mmcm_decode_power7(data);
     break;
 
   case 0x4E:
-    printf( "\nFiltReg1\n" );
+    printf( "\nFiltReg1: " );
     mmcm_decode_filtreg1(data);
     break;
 
   case 0x4F:
-    printf( "\nFiltReg2\n" );
+    printf( "\nFiltReg2: " );
     mmcm_decode_filtreg2(data);
     break;
 
   default:
-    printf( " %04x(r)", data );
+    if( data != 0 )
+      printf( " %04x(r)", data );
+    else
+      printf( " 0(r)", data );
   }
 }
 
@@ -279,8 +318,14 @@ void mmcm_dump(void)
 #ifdef CSR_HDMI_IN0_BASE
 	printf("dvisampler MMCM:\r\n");
 	for(i=0;i<128;i++)
-	  //		printf("%04x ", hdmi_in0_clocking_mmcm_read(i));
 	  mmcm_decode_reg(i, hdmi_in0_clocking_mmcm_read(i));
 	printf("\r\n");
+#ifdef CSR_HDMI_IN0_CLOCKING_MMCM_DRDY_O_ADDR
+	printf("=====================================================\r\n");
+	printf("output MMCM:\r\n");
+	for(i=0;i<128;i++)
+	  mmcm_decode_reg(i, hdmi_in0_clocking_mmcm_read_o(i));
+	printf("\r\n");
+#endif
 #endif
 }
