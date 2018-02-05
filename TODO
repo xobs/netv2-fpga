@@ -1,5 +1,3 @@
-- Test video raw loopback SoC (no buffering)
-- Test video raw dma loopback SoC (buffering in DRAM)
 - Add real hdmi support to litevideo input. (at least ignore specific hdmi data)
 - Inject captured hdmi data into litevideo input, simulate.
 - Test real hdmi support on board.
