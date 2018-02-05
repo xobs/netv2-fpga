@@ -31,8 +31,11 @@ unsigned int hdmi_in0_framebuffer_base(char n) {
 	return HDMI_IN0_FRAMEBUFFERS_BASE + n*HDMI_IN0_FRAMEBUFFERS_SIZE;
 }
 
+#ifdef HDMI_IN0_INTERRUPT
 static int hdmi_in0_fb_slot_indexes[2];
 static int hdmi_in0_next_fb_index;
+#endif
+
 static int hdmi_in0_hres, hdmi_in0_vres;
 
 extern void processor_update(void);
@@ -111,13 +114,13 @@ static int hdmi_in0_locked;
 
 void hdmi_in0_init_video(int hres, int vres)
 {
-	unsigned int mask;
-
 	hdmi_in0_clocking_mmcm_reset_write(1);
 	hdmi_in0_connected = hdmi_in0_locked = 0;
 	hdmi_in0_hres = hres; hdmi_in0_vres = vres;
 
 #ifdef  HDMI_IN0_INTERRUPT
+	unsigned int mask;
+
 	hdmi_in0_dma_frame_size_write(hres*vres*2);
 	hdmi_in0_fb_slot_indexes[0] = 0;
 	hdmi_in0_dma_slot0_address_write(hdmi_in0_framebuffer_base(0));
@@ -274,7 +277,7 @@ int hdmi_in0_init_phase(void)
 	return 0;
 }
 
-int hdmi_in0_phase_startup(freq)
+int hdmi_in0_phase_startup(int freq)
 {
 	int ret;
 	int attempts;

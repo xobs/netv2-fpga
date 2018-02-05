@@ -366,12 +366,11 @@ static void fb_get_clock_md(unsigned int pixel_clock, unsigned int *best_m, unsi
 static void fb_set_mode(const struct video_timing *mode)
 {
 	unsigned int clock_m, clock_d;
-	unsigned int hdmi_out0_enabled;
-	unsigned int hdmi_out1_enabled;
 
 	fb_get_clock_md(10*(mode->pixel_clock), &clock_m, &clock_d);
 
 #ifdef CSR_HDMI_OUT0_BASE
+	unsigned int hdmi_out0_enabled;
 	if (hdmi_out0_core_initiator_enable_read()) {
 		hdmi_out0_enabled = 1;
 		hdmi_out0_core_initiator_enable_write(0);
@@ -391,6 +390,7 @@ static void fb_set_mode(const struct video_timing *mode)
 #endif
 
 #ifdef CSR_HDMI_OUT1_BASE
+	unsigned int hdmi_out1_enabled;
 	if (hdmi_out1_core_initiator_enable_read()) {
 		hdmi_out1_enabled = 1;
 		hdmi_out1_core_initiator_enable_write(0);

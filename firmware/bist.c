@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <uart.h>
 #include <time.h>
 #include <console.h>
 #include "ci.h"

@@ -233,7 +233,7 @@ static void debug_ddr(void);
 
 static void status_print(void)
 {
-	unsigned int underflows;
+
 #ifdef CSR_HDMI_IN0_BASE
 	wprintf(
 		"input0:  %dx%d",
@@ -259,6 +259,7 @@ static void status_print(void)
 #endif
 
 #ifdef CSR_HDMI_OUT0_BASE
+	unsigned int underflows;
 	wprintf("output0: ");
 	if(hdmi_out0_core_initiator_enable_read()) {
 		hdmi_out0_core_underflow_enable_write(1);
@@ -543,7 +544,7 @@ static void debug_ddr(void)
 #endif
 
 #ifdef CSR_DNA_ID_ADDR
-void print_board_dna(void) {
+static void print_board_dna(void) {
 	int i;
 	wprintf("Board's DNA: ");
 	for(i=0; i<CSR_DNA_ID_SIZE; i++) {
