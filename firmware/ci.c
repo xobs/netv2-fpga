@@ -113,6 +113,10 @@ static void ci_help(void)
 	wputs("help                           - this command");
 	wputs("reboot                         - reboot CPU");
 	wputs("");
+	wputs("mr                             - read address space");
+	wputs("mw                             - write address space");
+	wputs("mc                             - copy address space");
+	wputs("");
 	help_status();
 	wputs("");
 	help_video_matrix();
@@ -145,11 +149,7 @@ static void ci_help(void)
 	help_sdram_test();
 	wputs("");
 #endif
-
-	help_memread();
-	help_memwrite();
 	wputs("");
-
 	help_debug();
 }
 
@@ -600,6 +600,9 @@ void ci_service(void)
 		wputs("");
 	}
 	else if(strcmp(token, "reboot") == 0) reboot();
+	else if(strcmp(token, "mr") == 0) mr(get_token(&str), get_token(&str));
+	else if(strcmp(token, "mw") == 0) mw(get_token(&str), get_token(&str), get_token(&str));
+	else if(strcmp(token, "mc") == 0) mc(get_token(&str), get_token(&str), get_token(&str));
 	else if(strcmp(token, "video_matrix") == 0) {
 		token = get_token(&str);
 		if(strcmp(token, "list") == 0) {
@@ -728,30 +731,6 @@ void ci_service(void)
 		}
 	}
 #endif
-
-	else if(strcmp(token, "mr") == 0 ) {
-	  unsigned int addr, len;
-	  char *str2;
-	  token = get_token(&str);
-	  addr = strtoul(token, NULL, 0);
-	  str2 = str;
-	  token = get_token(&str);
-	  if( str == str2 ) {
-	    len = 1;
-	  } else {
-	    len = strtoul(token, NULL, 0);
-	  }
-	  dump_mem(addr, len);
-	}
-
-	else if(strcmp(token, "mw") == 0 ) {
-	  unsigned int addr, data;
-	  token = get_token(&str);
-	  addr = strtoul(token, NULL, 0);
-	  token = get_token(&str);
-	  data = strtoul(token, NULL, 0);
-	  poke_mem(addr, data);
-	}
 
 	else if(strcmp(token, "status") == 0) {
 		token = get_token(&str);

@@ -1,9 +1,8 @@
 #ifndef __DUMP_H
 #define __DUMP_H
 
-void dump_mem(unsigned int addr, unsigned int len);
-void poke_mem(unsigned int addr, unsigned int data);
-void help_memread(void);
-void help_memwrite(void);
+void mr(char *startaddr, char *len);
+void mw(char *addr, char *value, char *count);
+void mc(char *dstaddr, char *srcaddr, char *count);
 
 #endif
