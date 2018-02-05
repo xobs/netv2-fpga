@@ -69,6 +69,19 @@ static void hdmi_in_0_config_60_120mhz(void) {
 	hdmi_in0_clocking_mmcm_write(0x0c, 0x1000 |  (1<<6) | 1); /* clkout2_divide =  2 */
 	hdmi_in0_clocking_mmcm_write(0x0d, 0);                    /* clkout2_divide =  2 */
 
+	// lock/filter parameters derived from these VCO settings for 720p:
+	/*      p_BANDWIDTH="OPTIMIZED", i_RST=self._mmcm_reset.storage, o_LOCKED=mmcm_locked,
+
+                # VCO
+                p_REF_JITTER1=0.01, p_CLKIN1_PERIOD=13.5, #6.734, 7.2
+                p_CLKFBOUT_MULT_F=10.0, p_CLKFBOUT_PHASE=0.000, p_DIVCLK_DIVIDE=1,
+                i_CLKIN1=clk_input_bufr, i_CLKFBIN=mmcm_fb_o, o_CLKFBOUT=mmcm_fb, */
+	hdmi_in0_clocking_mmcm_write(0x18, 0x3e8); // lock register 1
+	hdmi_in0_clocking_mmcm_write(0x19, (0x0 << 15) | (0x1c << 10) | 0x3001); // lock register 2
+	hdmi_in0_clocking_mmcm_write(0x1A, (0x1 << 15) | (0x1c << 10) | 0x33e9); // lock register 3
+	hdmi_in0_clocking_mmcm_write(0x4E, (0x1 << 15) | (0x3 << 11) | (0x1 << 8) | 0x8); // filter register 1, reserved[7:0] is 0x8
+	hdmi_in0_clocking_mmcm_write(0x4F, (0x2 << 11) | (0x2 << 7)  | (0x0 << 4) | 0x8); // filter register 2, reserved[7:0] is 0x8
+
 #ifdef CSR_HDMI_IN0_CLOCKING_MMCM_DRDY_O_ADDR
 	hdmi_in0_clocking_mmcm_write_o(0x14, 0x1000 |  (2<<6) | 3);  /* clkfbout_mult  = 5 (2/3) */
 	hdmi_in0_clocking_mmcm_write_o(0x15, 1 << 7);                /* clkfbout_mult  = 5 (edge = 1) */
@@ -77,6 +90,20 @@ static void hdmi_in_0_config_60_120mhz(void) {
 	hdmi_in0_clocking_mmcm_write_o(0x0a, 0x1000 |  (2<<6) | 2);  /* clkout1_divide = 4 */
 	hdmi_in0_clocking_mmcm_write_o(0x0c, 0x1000 |  (0<<6) | 0);  /* clkout2_divide = 1 */
 	hdmi_in0_clocking_mmcm_write_o(0x0d, (1<<6));                /* clkout2_divide = 1 */
+
+	// lock/filter parameters derived from these VCO settings for 1080p, low bandwidth:
+	/*      p_BANDWIDTH="LOW", i_RST=self._mmcm_reset.storage, o_LOCKED=mmcm_locked_o,
+
+                # VCO
+                p_REF_JITTER1=0.01, p_CLKIN1_PERIOD=6.734,
+                p_CLKFBOUT_MULT_F=5.0, p_CLKFBOUT_PHASE=0.000, p_DIVCLK_DIVIDE=1,
+                i_CLKIN1=mmcm_clk0,  # uncompesated delay for best phase match between master/slave
+                i_CLKFBIN=mmcm_fb_o, o_CLKFBOUT=mmcm_fb_o,  */
+	hdmi_in0_clocking_mmcm_write(0x18, 0x3e8); // lock register 1
+	hdmi_in0_clocking_mmcm_write(0x19, (0x0 << 15) | (0xe << 10) | 0x3801); // lock register 2
+	hdmi_in0_clocking_mmcm_write(0x1A, (0x1 << 15) | (0xe << 10) | 0x3be9); // lock register 3
+	hdmi_in0_clocking_mmcm_write(0x4E, (0x0 << 15) | (0x1 << 11) | (0x0 << 8) | 0x8); // filter register 1, reserved[7:0] is 0x8
+	hdmi_in0_clocking_mmcm_write(0x4F, (0x3 << 11) | (0x2 << 7)  | (0x0 << 4) | 0x8); // filter register 2, reserved[7:0] is 0x8
 #endif
 }
 
@@ -88,6 +115,19 @@ static void hdmi_in_0_config_120_240mhz(void) {
 	hdmi_in0_clocking_mmcm_write(0x0a, 0x1000 |  (2<<6) | 2);  /* clkout1_divide = 4 */
 	hdmi_in0_clocking_mmcm_write(0x0c, 0x1000 |  (0<<6) | 0);  /* clkout2_divide = 1 */
 	hdmi_in0_clocking_mmcm_write(0x0d, (1<<6));                /* clkout2_divide = 1 */
+	
+	// lock/filter parameters derived from these VCO settings for 1080p, low bandwidth:
+	/*      p_BANDWIDTH="OPTIMIZED", i_RST=self._mmcm_reset.storage, o_LOCKED=mmcm_locked,
+
+	                  # VCO
+	  p_REF_JITTER1=0.01, p_CLKIN1_PERIOD=6.734,
+	  p_CLKFBOUT_MULT_F=5.0, p_CLKFBOUT_PHASE=0.000, p_DIVCLK_DIVIDE=1,
+	  i_CLKIN1=clk_input_bufr, i_CLKFBIN=mmcm_fb_o, o_CLKFBOUT=mmcm_fb, */
+	hdmi_in0_clocking_mmcm_write(0x18, 0x3e8); // lock register 1
+	hdmi_in0_clocking_mmcm_write(0x19, (0x0 << 15) | (0xe << 10) | 0x3801); // lock register 2
+	hdmi_in0_clocking_mmcm_write(0x1A, (0x1 << 15) | (0xe << 10) | 0x3be9); // lock register 3
+	hdmi_in0_clocking_mmcm_write(0x4E, (0x0 << 15) | (0x1 << 11) | (0x0 << 8) | 0x8); // filter register 1, reserved[7:0] is 0x8
+	hdmi_in0_clocking_mmcm_write(0x4F, (0x3 << 11) | (0x2 << 7)  | (0x0 << 4) | 0x8); // filter register 2, reserved[7:0] is 0x8
 
 #ifdef CSR_HDMI_IN0_CLOCKING_MMCM_DRDY_O_ADDR
 	hdmi_in0_clocking_mmcm_write_o(0x14, 0x1000 |  (2<<6) | 3);  /* clkfbout_mult  = 5 (2/3) */
@@ -97,6 +137,20 @@ static void hdmi_in_0_config_120_240mhz(void) {
 	hdmi_in0_clocking_mmcm_write_o(0x0a, 0x1000 |  (2<<6) | 2);  /* clkout1_divide = 4 */
 	hdmi_in0_clocking_mmcm_write_o(0x0c, 0x1000 |  (0<<6) | 0);  /* clkout2_divide = 1 */
 	hdmi_in0_clocking_mmcm_write_o(0x0d, (1<<6));                /* clkout2_divide = 1 */
+
+	// lock/filter parameters derived from these VCO settings for 1080p, low bandwidth:
+	/*      p_BANDWIDTH="LOW", i_RST=self._mmcm_reset.storage, o_LOCKED=mmcm_locked_o,
+
+                # VCO
+                p_REF_JITTER1=0.01, p_CLKIN1_PERIOD=6.734,
+                p_CLKFBOUT_MULT_F=5.0, p_CLKFBOUT_PHASE=0.000, p_DIVCLK_DIVIDE=1,
+                i_CLKIN1=mmcm_clk0,  # uncompesated delay for best phase match between master/slave
+                i_CLKFBIN=mmcm_fb_o, o_CLKFBOUT=mmcm_fb_o,  */
+	hdmi_in0_clocking_mmcm_write(0x18, 0x3e8); // lock register 1
+	hdmi_in0_clocking_mmcm_write(0x19, (0x0 << 15) | (0xe << 10) | 0x3801); // lock register 2
+	hdmi_in0_clocking_mmcm_write(0x1A, (0x1 << 15) | (0xe << 10) | 0x3be9); // lock register 3
+	hdmi_in0_clocking_mmcm_write(0x4E, (0x0 << 15) | (0x1 << 11) | (0x0 << 8) | 0x8); // filter register 1, reserved[7:0] is 0x8
+	hdmi_in0_clocking_mmcm_write(0x4F, (0x3 << 11) | (0x2 << 7)  | (0x0 << 4) | 0x8); // filter register 2, reserved[7:0] is 0x8
 #endif
 }
 
