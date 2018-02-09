@@ -7,6 +7,7 @@ OBJECTS=isr.o \
 		config.o \
 		processor.o \
 		hdmi_in0.o \
+		hdmi_in1.o \
 		hdmi_out0.o \
 		pattern.o \
 		edid.o \

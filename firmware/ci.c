@@ -14,6 +14,7 @@
 #include "asm.h"
 #include "config.h"
 #include "hdmi_in0.h"
+#include "hdmi_in1.h"
 #include "processor.h"
 #include "mmcm.h"
 #include "ci.h"

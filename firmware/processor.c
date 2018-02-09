@@ -9,6 +9,7 @@
 #include <time.h>
 
 #include "hdmi_in0.h"
+#include "hdmi_in1.h"
 #include "pattern.h"
 #include "encoder.h"
 #include "edid.h"
