@@ -535,10 +535,18 @@ class VideoOverlaySoC(BaseSoC):
             self.hdmi_in0.clocking.cd_pix5x.clk)
 
         # hdmi out 0 (raw tmds)
-        #hdmi_out0_pads = platform.request("hdmi_out", 0)
-        #self.submodules.hdmi_out0_clk_gen = S7HDMIOutEncoderSerializer(hdmi_out0_pads.clk_p, hdmi_out0_pads.clk_n, bypass_encoder=True)
-        #self.comb += self.hdmi_out0_clk_gen.data.eq(Signal(10, reset=0b0000011111))
-        #self.submodules.hdmi_out0_phy = S7HDMIOutPHY(hdmi_out0_pads, mode="raw")
+        def _to_hdmi_in0_pix(m):
+            return  ClockDomainsRenamer(
+                {"pix_o": "hdmi_in0_pix_o",
+                 "pix5x_o": "hdmi_in0_pix5x_o"}
+                )(m)
+
+        hdmi_out0_pads = platform.request("hdmi_out", 0)
+        hdmi_out0_clk_gen = S7HDMIOutEncoderSerializer(hdmi_out0_pads.clk_p, hdmi_out0_pads.clk_n, bypass_encoder=True)
+        self.hdmi_out0_clk_gen = _to_hdmi_in0_pix(hdmi_out0_clk_gen)
+        self.comb += self.hdmi_out0_clk_gen.data.eq(Signal(10, reset=0b0000011111))
+        hdmi_out0_phy = S7HDMIOutPHY(hdmi_out0_pads, mode="raw")
+        self.submodules.hdmi_out0_phy = _to_hdmi_in0_pix(hdmi_out0_phy)
 
         # hdmi over
         self.comb += [
@@ -547,11 +555,11 @@ class VideoOverlaySoC(BaseSoC):
         ]
 
         # hdmi in 0 to hdmi out 0
-        #self.sync.pix_o += [ # extra delay to absorb cross-domain jitter & routing
-        #    self.hdmi_out0_phy.sink.c0.eq(self.hdmi_in0.syncpol.c0),
-        #    self.hdmi_out0_phy.sink.c1.eq(self.hdmi_in0.syncpol.c1),
-        #    self.hdmi_out0_phy.sink.c2.eq(self.hdmi_in0.syncpol.c2),
-        #]
+        self.sync.hdmi_in0_pix_o += [ # extra delay to absorb cross-domain jitter & routing
+            self.hdmi_out0_phy.sink.c0.eq(self.hdmi_in0.syncpol.c0),
+            self.hdmi_out0_phy.sink.c1.eq(self.hdmi_in0.syncpol.c1),
+            self.hdmi_out0_phy.sink.c2.eq(self.hdmi_in0.syncpol.c2),
+        ]
 
         # hdmi in 1
         hdmi_in1_pads = platform.request("hdmi_in", 1)
@@ -574,7 +582,7 @@ class VideoOverlaySoC(BaseSoC):
             self.hdmi_in1.clocking.cd_pix1p25x.clk,
             self.hdmi_in1.clocking.cd_pix5x.clk)
 
-        platform.add_platform_command("set_property CLOCK_DEDICATED_ROUTE FALSE [get_nets hdmi_in1_mmcm_clk0]")
+        platform.add_platform_command("set_property CLOCK_DEDICATED_ROUTE FALSE [get_nets videooverlaysoc_hdmi_in1_mmcm_clk0]")
 
 
 class VideoRawDMALoopbackSoC(BaseSoC):
