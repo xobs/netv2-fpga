@@ -484,16 +484,24 @@ class VideoSoC(BaseSoC):
         self.analyzer.export_csv(vns, "test/analyzer.csv")
 
 
-class VideoRawLoopbackSoC(BaseSoC):
+class VideoOverlaySoC(BaseSoC):
     csr_peripherals = {
         "hdmi_out0",
         "hdmi_in0",
         "hdmi_in0_freq",
         "hdmi_in0_edid_mem",
+        "hdmi_in1",
+        "hdmi_in1_freq",
+        "hdmi_in1_edid_mem",  
         "generator",
         "checker",
     }
     csr_map_update(BaseSoC.csr_map, csr_peripherals)
+
+    interrupt_map = {
+        "hdmi_in1": 3,
+    }
+    interrupt_map.update(BaseSoC.interrupt_map)
 
     def __init__(self, platform, *args, **kwargs):
         BaseSoC.__init__(self, platform, *args, **kwargs)
@@ -502,16 +510,17 @@ class VideoRawLoopbackSoC(BaseSoC):
 
         pix_freq = 148.50e6
 
+        # bist
         generator_port = self.sdram.crossbar.get_port(cd="sys")  # mode="write"
         self.submodules.generator = LiteDRAMBISTGenerator(generator_port, random=True)
 
         checker_port = self.sdram.crossbar.get_port(cd="sys")  # mode="read"
         self.submodules.checker = LiteDRAMBISTChecker(checker_port, random=True)
 
-        # hdmi in
+        # hdmi in 0 (raw tmds)
         hdmi_in0_pads = platform.request("hdmi_in", 0)
         self.submodules.hdmi_in0_freq = FrequencyMeter(period=self.clk_freq)
-        self.submodules.hdmi_in0 = HDMIIn(hdmi_in0_pads, device="xc7")
+        self.submodules.hdmi_in0 = HDMIIn(hdmi_in0_pads, device="xc7", split_mmcm=True)
         self.comb += self.hdmi_in0_freq.clk.eq(self.hdmi_in0.clocking.cd_pix_o.clk)
         self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix.clk, period_ns(1*pix_freq))
         self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix_o.clk, period_ns(1*pix_freq))
@@ -525,11 +534,11 @@ class VideoRawLoopbackSoC(BaseSoC):
             self.hdmi_in0.clocking.cd_pix1p25x.clk,
             self.hdmi_in0.clocking.cd_pix5x.clk)
 
-        # hdmi out
-        hdmi_out0_pads = platform.request("hdmi_out", 0)
-        self.submodules.hdmi_out0_clk_gen = S7HDMIOutEncoderSerializer(hdmi_out0_pads.clk_p, hdmi_out0_pads.clk_n, bypass_encoder=True)
-        self.comb += self.hdmi_out0_clk_gen.data.eq(Signal(10, reset=0b0000011111))
-        self.submodules.hdmi_out0_phy = S7HDMIOutPHY(hdmi_out0_pads, mode="raw")
+        # hdmi out 0 (raw tmds)
+        #hdmi_out0_pads = platform.request("hdmi_out", 0)
+        #self.submodules.hdmi_out0_clk_gen = S7HDMIOutEncoderSerializer(hdmi_out0_pads.clk_p, hdmi_out0_pads.clk_n, bypass_encoder=True)
+        #self.comb += self.hdmi_out0_clk_gen.data.eq(Signal(10, reset=0b0000011111))
+        #self.submodules.hdmi_out0_phy = S7HDMIOutPHY(hdmi_out0_pads, mode="raw")
 
         # hdmi over
         self.comb += [
@@ -537,23 +546,36 @@ class VideoRawLoopbackSoC(BaseSoC):
             platform.request("hdmi_sda_over_dn").eq(0),
         ]
 
-        # hdmi in to hdmi out
-        c0_pix_o = Signal(10)
-        c1_pix_o = Signal(10)
-        c2_pix_o = Signal(10)
-        self.sync.pix_o += [  # extra delay to absorb cross-domain jitter & routing
-            c0_pix_o.eq(self.hdmi_in0.syncpol.c0),
-            c1_pix_o.eq(self.hdmi_in0.syncpol.c1),
-            c2_pix_o.eq(self.hdmi_in0.syncpol.c2)
-        ]
+        # hdmi in 0 to hdmi out 0
+        #self.sync.pix_o += [ # extra delay to absorb cross-domain jitter & routing
+        #    self.hdmi_out0_phy.sink.c0.eq(self.hdmi_in0.syncpol.c0),
+        #    self.hdmi_out0_phy.sink.c1.eq(self.hdmi_in0.syncpol.c1),
+        #    self.hdmi_out0_phy.sink.c2.eq(self.hdmi_in0.syncpol.c2),
+        #]
 
-        self.comb += [
-            self.hdmi_out0_phy.sink.c0.eq(c0_pix_o),
-            self.hdmi_out0_phy.sink.c1.eq(c1_pix_o),
-            self.hdmi_out0_phy.sink.c2.eq(c2_pix_o),
-        ]
-        platform.add_platform_command(
-            "set_property CLOCK_DEDICATED_ROUTE FALSE [get_nets hdmi_in_ibufds/ob]")
+        # hdmi in 1
+        hdmi_in1_pads = platform.request("hdmi_in", 1)
+        self.submodules.hdmi_in1_freq = FrequencyMeter(period=self.clk_freq)
+        self.submodules.hdmi_in1 = HDMIIn(hdmi_in1_pads,
+                                         self.sdram.crossbar.get_port(mode="write"),
+                                         fifo_depth=512,
+                                         device="xc7",
+                                         split_mmcm=True)
+        self.comb += self.hdmi_in1_freq.clk.eq(self.hdmi_in1.clocking.cd_pix_o.clk)
+        self.platform.add_period_constraint(self.hdmi_in1.clocking.cd_pix.clk, period_ns(1*pix_freq))
+        self.platform.add_period_constraint(self.hdmi_in1.clocking.cd_pix_o.clk, period_ns(1*pix_freq))
+        self.platform.add_period_constraint(self.hdmi_in1.clocking.cd_pix1p25x.clk, period_ns(1.25*pix_freq))
+        self.platform.add_period_constraint(self.hdmi_in1.clocking.cd_pix5x.clk, period_ns(5*pix_freq))
+
+        self.platform.add_false_path_constraints(
+            self.crg.cd_sys.clk,
+            self.hdmi_in1.clocking.cd_pix.clk,
+            self.hdmi_in1.clocking.cd_pix_o.clk,
+            self.hdmi_in1.clocking.cd_pix1p25x.clk,
+            self.hdmi_in1.clocking.cd_pix5x.clk)
+
+        platform.add_platform_command("set_property CLOCK_DEDICATED_ROUTE BACKBONE [get_nets hdmi_in1_mmcm_clk0")
+        platform.add_platform_command("set_property CLOCK_DEDICATED_ROUTE FALSE [get_nets hdmi_in1_mmcm_clk2")
 
 
 class VideoRawDMALoopbackSoC(BaseSoC):
@@ -657,7 +679,7 @@ class VideoRawDMALoopbackSoC(BaseSoC):
 def main():
     platform = Platform()
     if len(sys.argv) < 2:
-        print("missing target (base or pcie or video or video_raw_loopback or video_raw_dma_loopback)")
+        print("missing target (base or pcie or video or video_overlay or video_raw_dma_loopback)")
         exit()
     if sys.argv[1] == "base":
         soc = BaseSoC(platform)
@@ -665,8 +687,8 @@ def main():
         soc = PCIeSoC(platform)
     elif sys.argv[1] == "video":
         soc = VideoSoC(platform)
-    elif sys.argv[1] == "video_raw_loopback":
-        soc = VideoRawLoopbackSoC(platform)
+    elif sys.argv[1] == "video_overlay":
+        soc = VideoOverlaySoC(platform)
     elif sys.argv[1] == "video_raw_dma_loopback":
         soc = VideoRawDMALoopbackSoC(platform)
     builder = Builder(soc, output_dir="build", csr_csv="test/csr.csv")
