@@ -521,7 +521,7 @@ class VideoOverlaySoC(BaseSoC):
         hdmi_in0_pads = platform.request("hdmi_in", 0)
         self.submodules.hdmi_in0_freq = FrequencyMeter(period=self.clk_freq)
         self.submodules.hdmi_in0 = HDMIIn(hdmi_in0_pads, device="xc7", split_mmcm=True)
-        self.comb += self.hdmi_in0_freq.clk.eq(self.hdmi_in0.clocking.cd_pix_o.clk)
+        self.comb += self.hdmi_in0_freq.clk.eq(self.hdmi_in0.clocking.cd_pix.clk)
         self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix.clk, period_ns(1*pix_freq))
         self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix_o.clk, period_ns(1*pix_freq))
         self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix1p25x.clk, period_ns(1.25*pix_freq))
@@ -569,7 +569,7 @@ class VideoOverlaySoC(BaseSoC):
                                          fifo_depth=512,
                                          device="xc7",
                                          split_mmcm=True)
-        self.comb += self.hdmi_in1_freq.clk.eq(self.hdmi_in1.clocking.cd_pix_o.clk)
+        self.comb += self.hdmi_in1_freq.clk.eq(self.hdmi_in1.clocking.cd_pix.clk)
         self.platform.add_period_constraint(self.hdmi_in1.clocking.cd_pix.clk, period_ns(1*pix_freq))
         self.platform.add_period_constraint(self.hdmi_in1.clocking.cd_pix_o.clk, period_ns(1*pix_freq))
         self.platform.add_period_constraint(self.hdmi_in1.clocking.cd_pix1p25x.clk, period_ns(1.25*pix_freq))
