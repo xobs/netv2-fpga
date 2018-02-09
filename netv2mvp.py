@@ -574,8 +574,7 @@ class VideoOverlaySoC(BaseSoC):
             self.hdmi_in1.clocking.cd_pix1p25x.clk,
             self.hdmi_in1.clocking.cd_pix5x.clk)
 
-        platform.add_platform_command("set_property CLOCK_DEDICATED_ROUTE BACKBONE [get_nets hdmi_in1_mmcm_clk0")
-        platform.add_platform_command("set_property CLOCK_DEDICATED_ROUTE FALSE [get_nets hdmi_in1_mmcm_clk2")
+        platform.add_platform_command("set_property CLOCK_DEDICATED_ROUTE FALSE [get_nets hdmi_in1_mmcm_clk0]")
 
 
 class VideoRawDMALoopbackSoC(BaseSoC):
