@@ -14,7 +14,7 @@
 
 #include "hdmi_in1.h"
 
-int hdmi_in1_debug;
+int hdmi_in1_debug = 1;
 int hdmi_in1_fb_index;
 
 #define FRAMEBUFFER_COUNT 4
@@ -392,7 +392,7 @@ void hdmi_in1_service(int freq)
 			if(hdmi_in1_debug)
 				printf("hdmi_in1: connected\r\n");
 			hdmi_in1_connected = 1;
-			hdmi_in1_clocking_mmcm_reset_write(0);
+			//			hdmi_in1_clocking_mmcm_reset_write(0);
 		}
 	}
 	hdmi_in1_check_overflow();

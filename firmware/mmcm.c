@@ -108,7 +108,7 @@ static void hdmi_in_0_config_60_120mhz(void) {
 }
 
 static void hdmi_in_0_config_120_240mhz(void) {
-#if 0	
+#if 1	
 	hdmi_in0_clocking_mmcm_write(0x14, 0x1000 |  (2<<6) | 3);  /* clkfbout_mult  = 5 (2/3) */
 	hdmi_in0_clocking_mmcm_write(0x15, 1 << 7);                /* clkfbout_mult  = 5 (edge = 1) */
 	hdmi_in0_clocking_mmcm_write(0x08, 0x1000 |  (2<<6) | 3);  /* clkout0_divide = 5 (2/3) */
@@ -216,7 +216,7 @@ static void hdmi_in_1_config_60_120mhz(void) {
 	hdmi_in1_clocking_mmcm_write(0x1A, (0x1 << 15) | (0x1c << 10) | 0x33e9); // lock register 3
 	hdmi_in1_clocking_mmcm_write(0x4E, (0x1 << 15) | (0x3 << 11) | (0x1 << 8) | 0x8); // filter register 1, reserved[7:0] is 0x8
 	hdmi_in1_clocking_mmcm_write(0x4F, (0x2 << 11) | (0x2 << 7)  | (0x0 << 4) | 0x8); // filter register 2, reserved[7:0] is 0x8
-
+	
 #ifdef CSR_HDMI_IN1_CLOCKING_MMCM_DRDY_O_ADDR
 	hdmi_in1_clocking_mmcm_write_o(0x14, 0x1000 |  (2<<6) | 3);  /* clkfbout_mult  = 5 (2/3) */
 	hdmi_in1_clocking_mmcm_write_o(0x15, 1 << 7);                /* clkfbout_mult  = 5 (edge = 1) */
@@ -243,7 +243,6 @@ static void hdmi_in_1_config_60_120mhz(void) {
 }
 
 static void hdmi_in_1_config_120_240mhz(void) {
-#if 0
 	hdmi_in1_clocking_mmcm_write(0x14, 0x1000 |  (2<<6) | 3);  /* clkfbout_mult  = 5 (2/3) */
 	hdmi_in1_clocking_mmcm_write(0x15, 1 << 7);                /* clkfbout_mult  = 5 (edge = 1) */
 	hdmi_in1_clocking_mmcm_write(0x08, 0x1000 |  (2<<6) | 3);  /* clkout0_divide = 5 (2/3) */
@@ -288,7 +287,6 @@ static void hdmi_in_1_config_120_240mhz(void) {
 	hdmi_in1_clocking_mmcm_write(0x4E, (0x0 << 15) | (0x1 << 11) | (0x0 << 8) | 0x8); // filter register 1, reserved[7:0] is 0x8
 	hdmi_in1_clocking_mmcm_write(0x4F, (0x3 << 11) | (0x2 << 7)  | (0x0 << 4) | 0x8); // filter register 2, reserved[7:0] is 0x8
 #endif
-#endif
 }
 #endif
 
@@ -300,7 +298,6 @@ void mmcm_config_for_clock(int freq)
 	 */
   
 #ifdef CSR_HDMI_IN0_BASE
-	printf("here1\n");
 	if(freq < 3000)
 		printf("Frequency too low for input MMCMs\r\n");
 	else if(freq < 6000)
@@ -311,11 +308,9 @@ void mmcm_config_for_clock(int freq)
 		hdmi_in_0_config_120_240mhz();
 	else
 		printf("Frequency too high for input MMCMs\r\n");
-	printf("here2\n");
 #endif
 
 #ifdef CSR_HDMI_IN1_BASE
-	printf("here3\n");
 	if(freq < 3000)
 		printf("Frequency too low for input MMCMs\r\n");
 	else if(freq < 6000)
@@ -326,7 +321,6 @@ void mmcm_config_for_clock(int freq)
 		hdmi_in_1_config_120_240mhz();
 	else
 		printf("Frequency too high for input MMCMs\r\n");
-	printf("here4\n");
 #endif
 }
 

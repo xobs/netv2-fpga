@@ -235,6 +235,7 @@ class CRG(Module):
         self.clock_domains.cd_clk100 = ClockDomain()
 
         clk50 = platform.request("clk50")
+        clk50_bufg = Signal()
         rst = Signal()
 
         pll_locked = Signal()
@@ -244,13 +245,14 @@ class CRG(Module):
         pll_sys4x_dqs = Signal()
         pll_clk200 = Signal()
         self.specials += [
+            Instance("BUFG", i_I=clk50, o_O=clk50_bufg),
             Instance("PLLE2_BASE",
                      p_STARTUP_WAIT="FALSE", o_LOCKED=pll_locked,
 
                      # VCO @ 1600 MHz
                      p_REF_JITTER1=0.01, p_CLKIN1_PERIOD=20.0,
                      p_CLKFBOUT_MULT=32, p_DIVCLK_DIVIDE=1,
-                     i_CLKIN1=clk50, i_CLKFBIN=pll_fb, o_CLKFBOUT=pll_fb,
+                     i_CLKIN1=clk50_bufg, i_CLKFBIN=pll_fb, o_CLKFBOUT=pll_fb,
 
                      # 100 MHz
                      p_CLKOUT0_DIVIDE=16, p_CLKOUT0_PHASE=0.0,
@@ -537,16 +539,22 @@ class VideoOverlaySoC(BaseSoC):
         # hdmi out 0 (raw tmds)
         def _to_hdmi_in0_pix(m):
             return  ClockDomainsRenamer(
-                {"pix_o": "hdmi_in0_pix_o",
-                 "pix5x_o": "hdmi_in0_pix5x_o"}
+                {
+                 "pix_o": "hdmi_in0_pix_o",
+                 "pix5x_o": "hdmi_in0_pix5x_o",
+#                 "hdmi_in0_pix_o" : "pix_o",
+#                 "hdmi_in0_pix5x_o" : "pix5x_o",
+                }
                 )(m)
 
         hdmi_out0_pads = platform.request("hdmi_out", 0)
-        hdmi_out0_clk_gen = S7HDMIOutEncoderSerializer(hdmi_out0_pads.clk_p, hdmi_out0_pads.clk_n, bypass_encoder=True)
-        self.hdmi_out0_clk_gen = _to_hdmi_in0_pix(hdmi_out0_clk_gen)
+        self.hdmi_out0_clk_gen = S7HDMIOutEncoderSerializer(hdmi_out0_pads.clk_p, hdmi_out0_pads.clk_n, bypass_encoder=True)
+#        self.hdmi_out0_clk_gen = _to_hdmi_in0_pix(hdmi_out0_clk_gen)
+#        self.submodules += self.hdmi_out0_clk_gen
         self.comb += self.hdmi_out0_clk_gen.data.eq(Signal(10, reset=0b0000011111))
         hdmi_out0_phy = S7HDMIOutPHY(hdmi_out0_pads, mode="raw")
-        self.submodules.hdmi_out0_phy = _to_hdmi_in0_pix(hdmi_out0_phy)
+#        self.submodules.hdmi_out0_phy = _to_hdmi_in0_pix(hdmi_out0_phy)
+        self.submodules.hdmi_out0_phy = hdmi_out0_phy
 
         # hdmi over
         self.comb += [
@@ -555,7 +563,8 @@ class VideoOverlaySoC(BaseSoC):
         ]
 
         # hdmi in 0 to hdmi out 0
-        self.sync.hdmi_in0_pix_o += [ # extra delay to absorb cross-domain jitter & routing
+#        self.sync.hdmi_in0_pix_o += [ # extra delay to absorb cross-domain jitter & routing
+        self.sync.pix_o += [ # extra delay to absorb cross-domain jitter & routing
             self.hdmi_out0_phy.sink.c0.eq(self.hdmi_in0.syncpol.c0),
             self.hdmi_out0_phy.sink.c1.eq(self.hdmi_in0.syncpol.c1),
             self.hdmi_out0_phy.sink.c2.eq(self.hdmi_in0.syncpol.c2),
@@ -568,17 +577,17 @@ class VideoOverlaySoC(BaseSoC):
                                          self.sdram.crossbar.get_port(mode="write"),
                                          fifo_depth=512,
                                          device="xc7",
-                                         split_mmcm=True)
+                                         split_mmcm=False)
         self.comb += self.hdmi_in1_freq.clk.eq(self.hdmi_in1.clocking.cd_pix.clk)
         self.platform.add_period_constraint(self.hdmi_in1.clocking.cd_pix.clk, period_ns(1*pix_freq))
-        self.platform.add_period_constraint(self.hdmi_in1.clocking.cd_pix_o.clk, period_ns(1*pix_freq))
+#        self.platform.add_period_constraint(self.hdmi_in1.clocking.cd_pix_o.clk, period_ns(1*pix_freq))
         self.platform.add_period_constraint(self.hdmi_in1.clocking.cd_pix1p25x.clk, period_ns(1.25*pix_freq))
         self.platform.add_period_constraint(self.hdmi_in1.clocking.cd_pix5x.clk, period_ns(5*pix_freq))
 
         self.platform.add_false_path_constraints(
             self.crg.cd_sys.clk,
             self.hdmi_in1.clocking.cd_pix.clk,
-            self.hdmi_in1.clocking.cd_pix_o.clk,
+#            self.hdmi_in1.clocking.cd_pix_o.clk,
             self.hdmi_in1.clocking.cd_pix1p25x.clk,
             self.hdmi_in1.clocking.cd_pix5x.clk)
 
