@@ -36,6 +36,7 @@ int main(void)
 	processor_start(config_get(CONFIG_KEY_RESOLUTION));
 
 #ifdef CSR_DMA_WRITER_BASE
+#error "not here!"
 	// do it here to be sure values are stabilized when we'll use them
 	dma_writer_slot0_base_write(MAIN_RAM_BASE + 0x1000000);
 	dma_writer_slot1_base_write(MAIN_RAM_BASE + 0x2000000);
@@ -43,6 +44,7 @@ int main(void)
 #endif
 
 #ifdef CSR_DMA_READER_BASE
+#error "not here!"
 	// do it here to be sure values are stabilized when we'll use them
 	dma_reader_slot0_base_write(MAIN_RAM_BASE + 0x1000000);
 	dma_reader_slot1_base_write(MAIN_RAM_BASE + 0x2000000);

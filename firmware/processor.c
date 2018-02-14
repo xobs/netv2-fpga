@@ -530,6 +530,7 @@ char * processor_get_source_name(int source) {
 void processor_update(void)
 {
 #ifdef CSR_HDMI_OUT0_BASE
+#error "not here!"
 	/*  hdmi_out0 */
 #ifdef CSR_HDMI_IN0_BASE
 	if(processor_hdmi_out0_source == VIDEO_IN_HDMI_IN0)
@@ -544,6 +545,7 @@ void processor_update(void)
 #endif
 
 #ifdef CSR_HDMI_OUT1_BASE
+#error "not here!"
 	/*  hdmi_out1 */
 #ifdef CSR_HDMI_IN0_BASE
 	if(processor_hdmi_out1_source == VIDEO_IN_HDMI_IN0)
@@ -559,6 +561,7 @@ void processor_update(void)
 
 
 #ifdef ENCODER_BASE
+#error "not here!"
 	/*  encoder */
 #ifdef CSR_HDMI_IN0_BASE
 	if(processor_encoder_source == VIDEO_IN_HDMI_IN0) {

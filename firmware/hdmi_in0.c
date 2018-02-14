@@ -122,6 +122,8 @@ void hdmi_in0_init_video(int hres, int vres)
 #ifdef  HDMI_IN0_INTERRUPT
 	unsigned int mask;
 
+	puts( "setting up HDMI0 interrupts\n" );
+
 	hdmi_in0_dma_frame_size_write(hres*vres*2);
 	hdmi_in0_fb_slot_indexes[0] = 0;
 	hdmi_in0_dma_slot0_address_write(hdmi_in0_framebuffer_base(0));
