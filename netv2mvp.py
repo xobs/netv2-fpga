@@ -499,7 +499,7 @@ class VideoOverlaySoC(BaseSoC):
     csr_map_update(BaseSoC.csr_map, csr_peripherals)
 
     interrupt_map = {
-        "hdmi_in1": 4,
+        "hdmi_in1": 3,
     }
     interrupt_map.update(BaseSoC.interrupt_map)
 

@@ -479,9 +479,11 @@ void processor_start(int mode)
 	pattern_fill_framebuffer(m->h_active, m->v_active);
 #endif
 
+	printf(".");
 #ifdef CSR_HDMI_IN0_BASE
 	mmcm_config_for_clock(m->pixel_clock);
 #endif
+	printf(".");
 	fb_set_mode(m);
 	edid_set_mode(m);
 #ifdef CSR_HDMI_IN0_BASE

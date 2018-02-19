@@ -52,6 +52,17 @@ int main(void)
 #endif
 
 	ci_prompt();
+
+	printf( "hdmi_in1_frame_overflow_read %x\n", hdmi_in1_frame_overflow_read() );
+	printf( "hdmi_in1_dma_frame_size_read %x\n", hdmi_in1_dma_frame_size_read() );
+	printf( "hdmi_in1_dma_slot0_status_read %x\n", hdmi_in1_dma_slot0_status_read() );
+	printf( "hdmi_in1_dma_slot0_address_read %x\n", hdmi_in1_dma_slot0_address_read() );
+	printf( "hdmi_in1_dma_slot1_status_read %x\n", hdmi_in1_dma_slot1_status_read() );
+	printf( "hdmi_in1_dma_slot1_addess_read %x\n", hdmi_in1_dma_slot1_address_read() );
+	printf( "hdmi_in1_dma_ev_status_read %x\n", hdmi_in1_dma_ev_status_read() );
+	printf( "hdmi_in1_dma_ev_pending_read %x\n", hdmi_in1_dma_ev_pending_read() );
+	printf( "hdmi_in1_dma_ev_enable_read %x\n", hdmi_in1_dma_ev_enable_read() );
+	
 	while(1) {
 		processor_service();
 		ci_service();

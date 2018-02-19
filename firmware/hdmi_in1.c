@@ -21,11 +21,11 @@ int hdmi_in1_fb_index;
 #define FRAMEBUFFER_MASK (FRAMEBUFFER_COUNT - 1)
 
 //#define HDMI_IN1_FRAMEBUFFERS_BASE (0x00000000 + 0x100000)
-#define HDMI_IN1_FRAMEBUFFERS_BASE (0x01000000 + 0x100000)
+#define HDMI_IN1_FRAMEBUFFERS_BASE (0x00080000)
 #define HDMI_IN1_FRAMEBUFFERS_SIZE (1920*1080*2)
 
-//#define CLEAN_COMMUTATION
-//#define DEBUG
+#define CLEAN_COMMUTATION
+#define DEBUG
 
 #define HDMI_IN1_PHASE_ADJUST_WER_THRESHOLD 10
 
@@ -108,6 +108,7 @@ void hdmi_in1_isr(void)
 	if(fb_index != -1)
 		hdmi_in1_fb_index = fb_index;
 	processor_update();
+
 }
 #endif
 
@@ -128,18 +129,20 @@ void hdmi_in1_init_video(int hres, int vres)
 	hdmi_in1_dma_frame_size_write(hres*vres*2);
 	hdmi_in1_fb_slot_indexes[0] = 0;
 	hdmi_in1_dma_slot0_address_write(hdmi_in1_framebuffer_base(0));
+	printf( "slot0 %x\n", hdmi_in1_framebuffer_base(0) );
 	hdmi_in1_dma_slot0_status_write(DVISAMPLER_SLOT_LOADED);
 	hdmi_in1_fb_slot_indexes[1] = 1;
 	hdmi_in1_dma_slot1_address_write(hdmi_in1_framebuffer_base(1));
+	printf( "slot1 %x\n", hdmi_in1_framebuffer_base(1) );
 	hdmi_in1_dma_slot1_status_write(DVISAMPLER_SLOT_LOADED);
 	hdmi_in1_next_fb_index = 2;
 
 	hdmi_in1_dma_ev_pending_write(hdmi_in1_dma_ev_pending_read());
-	hdmi_in1_dma_ev_enable_write(0x3);
+	//	hdmi_in1_dma_ev_enable_write(0x3);
 	mask = irq_getmask();
 	mask |= 1 << HDMI_IN1_INTERRUPT;
 	printf( "irq mask: %x\n", mask );
-	//	irq_setmask(mask);
+	irq_setmask(mask);
 
 	hdmi_in1_fb_index = 3;
 #endif
@@ -164,12 +167,11 @@ void hdmi_in1_clear_framebuffers(void)
 {
 	int i;
 	flush_l2_cache();
-#if 0
+
 	volatile unsigned int *framebuffer = (unsigned int *)(MAIN_RAM_BASE + HDMI_IN1_FRAMEBUFFERS_BASE);
 	for(i=0; i<(HDMI_IN1_FRAMEBUFFERS_SIZE*FRAMEBUFFER_COUNT)/4; i++) {
 		framebuffer[i] = 0x80108010; /* black in YCbCr 4:2:2*/
 	}
-#endif
 }
 
 static int hdmi_in1_d0, hdmi_in1_d1, hdmi_in1_d2;
