@@ -300,11 +300,11 @@ class BaseSoC(SoCSDRAM):
     def __init__(self, platform, **kwargs):
         clk_freq = int(100e6)
         SoCSDRAM.__init__(self, platform, clk_freq,
-            integrated_rom_size=0x8000,
-            integrated_sram_size=0x8000,
+            integrated_rom_size=0x6000,
+            integrated_sram_size=0x4000,
             #shadow_base=0x00000000,
             ident="NeTV2 LiteX Base SoC",
-#            reserve_nmi_interrupt=False,
+            reserve_nmi_interrupt=False,
             **kwargs)
 
         self.submodules.crg = CRG(platform)
@@ -312,7 +312,7 @@ class BaseSoC(SoCSDRAM):
         self.submodules.xadc = xadc.XADC()
 
         self.crg.cd_sys.clk.attr.add("keep")
-        self.platform.add_period_constraint(self.crg.cd_sys.clk, period_ns(100e6))
+        platform.add_period_constraint(self.crg.cd_sys.clk, period_ns(100e6))
 
         # sdram
         self.submodules.ddrphy = a7ddrphy.A7DDRPHY(platform.request("ddram"))
@@ -355,7 +355,7 @@ class PCIeSoC(BaseSoC):
 
         # pcie phy
         self.submodules.pcie_phy = S7PCIEPHY(platform, platform.request("pcie_x2"))
-        self.platform.add_false_path_constraints(
+        platform.add_false_path_constraints(
             self.crg.cd_sys.clk,
             self.pcie_phy.cd_pcie.clk)
 
@@ -521,13 +521,13 @@ class VideoOverlaySoC(BaseSoC):
         hdmi_in0_pads = platform.request("hdmi_in", 0)
         self.submodules.hdmi_in0_freq = FrequencyMeter(period=self.clk_freq)
         self.submodules.hdmi_in0 = HDMIIn(hdmi_in0_pads, device="xc7", split_mmcm=True)
-        self.comb += self.hdmi_in0_freq.clk.eq(self.hdmi_in0.clocking.cd_pix_o.clk)
-        self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix.clk, period_ns(1*pix_freq))
-        self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix_o.clk, period_ns(1*pix_freq))
-        self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix1p25x.clk, period_ns(1.25*pix_freq))
-        self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix5x.clk, period_ns(5*pix_freq))
+        self.comb += self.hdmi_in0_freq.clk.eq(self.hdmi_in0.clocking.cd_pix.clk)
+        platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix.clk, period_ns(1*pix_freq))
+        platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix_o.clk, period_ns(1*pix_freq))
+        platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix1p25x.clk, period_ns(1.25*pix_freq))
+        platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix5x.clk, period_ns(5*pix_freq))
 
-        self.platform.add_false_path_constraints(
+        platform.add_false_path_constraints(
             self.crg.cd_sys.clk,
             self.hdmi_in0.clocking.cd_pix.clk,
             self.hdmi_in0.clocking.cd_pix_o.clk,
@@ -573,19 +573,16 @@ class VideoOverlaySoC(BaseSoC):
                                          device="xc7",
                                          split_mmcm=False)
         self.comb += self.hdmi_in1_freq.clk.eq(self.hdmi_in1.clocking.cd_pix.clk)
-        self.platform.add_period_constraint(self.hdmi_in1.clocking.cd_pix.clk, period_ns(1*pix_freq))
-#        self.platform.add_period_constraint(self.hdmi_in1.clocking.cd_pix_o.clk, period_ns(1*pix_freq))
-        self.platform.add_period_constraint(self.hdmi_in1.clocking.cd_pix1p25x.clk, period_ns(1.25*pix_freq))
-        self.platform.add_period_constraint(self.hdmi_in1.clocking.cd_pix5x.clk, period_ns(5*pix_freq))
+        platform.add_period_constraint(self.hdmi_in1.clocking.cd_pix.clk, period_ns(1*pix_freq))
+        platform.add_period_constraint(self.hdmi_in1.clocking.cd_pix1p25x.clk, period_ns(1.25*pix_freq))
+        platform.add_period_constraint(self.hdmi_in1.clocking.cd_pix5x.clk, period_ns(5*pix_freq))
 
-        self.platform.add_false_path_constraints(
+        platform.add_false_path_constraints(
             self.crg.cd_sys.clk,
             self.hdmi_in1.clocking.cd_pix.clk,
-#            self.hdmi_in1.clocking.cd_pix_o.clk,
             self.hdmi_in1.clocking.cd_pix1p25x.clk,
             self.hdmi_in1.clocking.cd_pix5x.clk)
 
-        platform.add_platform_command("set_property CLOCK_DEDICATED_ROUTE FALSE [get_nets videooverlaysoc_hdmi_in1_mmcm_clk0]")
 
 
 class VideoRawDMALoopbackSoC(BaseSoC):
