@@ -783,6 +783,9 @@ void ci_service(void)
 #endif
 			if(found == 0)
 				wprintf("%s port has no EDID capabilities\r\n", token);
+		} else if(strcmp(token, "dma") == 0 ) {
+		  wprintf("initiating DMA on HDMI1\r\n");
+		  hdmi_in1_dma_ev_enable_write(0x3);
 		} else
 			help_debug();
 	} else {

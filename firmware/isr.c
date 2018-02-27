@@ -18,7 +18,7 @@ void isr(void)
 	if(irqs & (1 << HDMI_IN0_INTERRUPT))
 		hdmi_in0_isr();
 #endif
-#ifdef CSR_HDMI_IN1_INTERRUPT
+#ifdef HDMI_IN1_INTERRUPT
 	if(irqs & (1 << HDMI_IN1_INTERRUPT)) {
 		hdmi_in1_isr();
 	}
