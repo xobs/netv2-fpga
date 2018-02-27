@@ -1,0 +1,4 @@
+config,None,dw,128
+config,None,depth,512
+config,None,cd_ratio,1
+signal,0,bus,128
