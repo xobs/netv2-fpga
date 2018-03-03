@@ -33,6 +33,11 @@ from gateware.dma import DMAWriter, DMAReader, DMAControl
 from litedram.frontend.bist import LiteDRAMBISTGenerator
 from litedram.frontend.bist import LiteDRAMBISTChecker
 
+from litevideo.output import TimingDelay
+from litevideo.output.core import VideoOutCore
+from litevideo.csc.ycbcr2rgb import YCbCr2RGB
+from litevideo.csc.ycbcr422to444 import YCbCr422to444
+from litevideo.output.hdmi.encoder import Encoder
 
 _io = [
     ("clk50", 0, Pins("J19"), IOStandard("LVCMOS33")),
@@ -545,21 +550,6 @@ class VideoOverlaySoC(BaseSoC):
             platform.request("hdmi_sda_over_dn").eq(0),
         ]
 
-        # hdmi in to hdmi out
-        c0_pix_o = Signal(10)
-        c1_pix_o = Signal(10)
-        c2_pix_o = Signal(10)
-        self.sync.pix_o += [  # extra delay to absorb cross-domain jitter & routing
-            c0_pix_o.eq(self.hdmi_in0.syncpol.c0),
-            c1_pix_o.eq(self.hdmi_in0.syncpol.c1),
-            c2_pix_o.eq(self.hdmi_in0.syncpol.c2)
-        ]
-
-        self.comb += [
-            self.hdmi_out0_phy.sink.c0.eq(c0_pix_o),
-            self.hdmi_out0_phy.sink.c1.eq(c1_pix_o),
-            self.hdmi_out0_phy.sink.c2.eq(c2_pix_o),
-        ]
         platform.add_platform_command(
             "set_property CLOCK_DEDICATED_ROUTE FALSE [get_nets hdmi_in_ibufds/ob]")
 
@@ -583,6 +573,124 @@ class VideoOverlaySoC(BaseSoC):
             self.hdmi_in1.clocking.cd_pix1p25x.clk,
             self.hdmi_in1.clocking.cd_pix5x.clk)
 
+        #  hdmi out 1 (overlay ycbcr422)
+        #dma_reader = DMAReader(self.sdram.crossbar.get_port(mode="read", cd="pix_o"), dw=16)
+        #dma_reader = ClockDomainsRenamer("pix_o")(dma_reader)
+        #self.submodules += dma_reader
+        #self.submodules.dma_reader = ClockDomainsRenamer({"pix" : "pix_o"})(DMAControl(dma_reader))
+
+
+        out_dram_port = self.sdram.crossbar.get_port(mode="read", cd="pix_o", dw=16)
+        genlock_from_input = Signal()
+        self.submodules.hdmi_out0 = VideoOutCore(out_dram_port, mode="ycbcr422", fifo_depth=512, genlock=True, genlock_signal=genlock_from_input)
+        # we should need to access the .core signals as a CSR, right?
+        vsync = Signal()
+        vsync_r = Signal()
+        new_frame = Signal()
+        self.comb += vsync.eq(self.hdmi_in0.syncpol.vsync)
+        self.comb += new_frame.eq(vsync & ~vsync_r)  # pulses high on new frame
+        self.sync.pix_o += vsync_r.eq(vsync)
+        self.comb += genlock_from_input.eq(new_frame)
+
+        ycbcr422to444 = ClockDomainsRenamer("pix_o")(YCbCr422to444())
+        ycbcr2rgb = ClockDomainsRenamer("pix_o")(YCbCr2RGB())
+        timing_delay = TimingDelay(ycbcr422to444.latency + ycbcr2rgb.latency)
+        timing_delay = ClockDomainsRenamer(out_dram_port.cd)(timing_delay)
+        self.submodules += ycbcr422to444, ycbcr2rgb, timing_delay
+
+        # data / control
+        de_r = Signal()
+        core_source_valid_d = Signal()
+        core_source_data_d = Signal(16)
+        sync_cd = getattr(self.sync, out_dram_port.cd)
+        sync_cd += [
+            de_r.eq(self.hdmi_out0.source.de),
+            core_source_valid_d.eq(self.hdmi_out0.source.valid),
+            core_source_data_d.eq(self.hdmi_out0.source.data),
+        ]
+
+        self.comb += [
+            self.hdmi_out0.source.ready.eq(1),  # always ready, no flow control
+            ycbcr422to444.reset.eq(self.hdmi_out0.source.de & ~de_r),
+            ycbcr422to444.sink.valid.eq(core_source_valid_d),
+            ycbcr422to444.sink.y.eq(core_source_data_d[:8]),
+            ycbcr422to444.sink.cb_cr.eq(core_source_data_d[8:]),
+
+            ycbcr422to444.source.connect(ycbcr2rgb.sink),
+
+#            ycbcr2rgb.source.connect(driver.sink)
+        ]
+        # timing
+        self.comb += [
+            timing_delay.sink.de.eq(self.hdmi_out0.source.de),
+            timing_delay.sink.vsync.eq(self.hdmi_out0.source.vsync),
+            timing_delay.sink.hsync.eq(self.hdmi_out0.source.hsync),
+
+#            driver.sink.de.eq(timing_delay.source.de),
+#            driver.sink.vsync.eq(timing_delay.source.vsync),
+#            driver.sink.hsync.eq(timing_delay.source.hsync)
+        ]
+
+        self.submodules.encoder_red = encoder_red = ClockDomainsRenamer("pix_o")(Encoder())
+        self.submodules.encoder_grn = encoder_grn = ClockDomainsRenamer("pix_o")(Encoder())
+        self.submodules.encoder_blu = encoder_blu = ClockDomainsRenamer("pix_o")(Encoder())
+
+        red_c = Signal(2)
+        grn_c = Signal(2)
+        blu_c = Signal(2)
+        self.sync.pix_o += [
+            red_c.eq(self.hdmi_in0.data2_decod.output.c),
+            grn_c.eq(self.hdmi_in0.data1_decod.output.c),
+            blu_c.eq(self.hdmi_in0.data0_decod.output.c)
+        ]
+        self.comb += [
+            ycbcr2rgb.source.ready.eq(1),
+
+            encoder_red.d.eq(ycbcr2rgb.source.r),
+            encoder_red.de.eq(1),
+            encoder_red.c.eq(red_c),
+
+            encoder_grn.d.eq(ycbcr2rgb.source.g),
+            encoder_grn.de.eq(1),
+            encoder_grn.c.eq(grn_c),
+
+            encoder_blu.d.eq(ycbcr2rgb.source.b),
+            encoder_blu.de.eq(1),
+            encoder_blu.c.eq(blu_c),
+        ]
+
+        # TODO: hdmi out 1 to hdmi out 0 injection
+        #self.comb += [
+            #ycbcr2rgb.source.valid
+            #ycbcr2rgb.source.r
+            #ycbcr2rgb.source.g
+            #ycbcr2rgb.source.b
+        #]
+
+        # hdmi in to hdmi out
+        c0_pix_o = Signal(10)
+        c1_pix_o = Signal(10)
+        c2_pix_o = Signal(10)
+        self.sync.pix_o += [  # extra delay to absorb cross-domain jitter & routing
+            c0_pix_o.eq(self.hdmi_in0.syncpol.c0),
+            c1_pix_o.eq(self.hdmi_in0.syncpol.c1),
+            c2_pix_o.eq(self.hdmi_in0.syncpol.c2)
+        ]
+
+        self.sync.pix_o += [
+            If( (self.hdmi_out0.timing.hcounter > 100) & (self.hdmi_out0.timing.hcounter < 400) &
+                (self.hdmi_out0.timing.vcounter > 100) & (self.hdmi_out0.timing.vcounter < 400),
+                    self.hdmi_out0_phy.sink.c0.eq(encoder_blu.out),
+                    self.hdmi_out0_phy.sink.c1.eq(encoder_grn.out),
+                    self.hdmi_out0_phy.sink.c2.eq(encoder_red.out),
+                ).Else(
+                    self.hdmi_out0_phy.sink.c0.eq(c0_pix_o),
+                    self.hdmi_out0_phy.sink.c1.eq(c1_pix_o),
+                    self.hdmi_out0_phy.sink.c2.eq(c2_pix_o),
+            )
+        ]
+
+"""
         # litescope
         litescope_serial = platform.request("serial", 1)
         litescope_bus = Signal(128)
@@ -608,7 +716,7 @@ class VideoOverlaySoC(BaseSoC):
             platform.request("user_led", 2).eq(litescope_o[1]),
             litescope_i.eq(0x5AA5)
         ]
-
+"""
 
 
 
