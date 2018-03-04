@@ -2,8 +2,10 @@
 import sys
 import os
 
-from litex.gen import *
-from litex.gen.genlib.resetsync import AsyncResetSynchronizer
+from migen import *
+from migen.genlib.resetsync import AsyncResetSynchronizer
+# from litex.gen import *
+#from litex.gen.genlib.resetsync import AsyncResetSynchronizer
 
 from litex.build.generic_platform import *
 from litex.build.xilinx import XilinxPlatform
@@ -33,6 +35,7 @@ from gateware.dma import DMAWriter, DMAReader, DMAControl
 from litedram.frontend.bist import LiteDRAMBISTGenerator
 from litedram.frontend.bist import LiteDRAMBISTChecker
 
+from litevideo.output.common import *
 from litevideo.output import TimingDelay
 from litevideo.output.core import VideoOutCore
 from litevideo.csc.ycbcr2rgb import YCbCr2RGB
@@ -491,7 +494,7 @@ class VideoSoC(BaseSoC):
 
 class VideoOverlaySoC(BaseSoC):
     csr_peripherals = {
-        "hdmi_out0",
+        "hdmi_core_out0",
         "hdmi_in0",
         "hdmi_in0_freq",
         "hdmi_in0_edid_mem",
@@ -500,6 +503,7 @@ class VideoOverlaySoC(BaseSoC):
         "hdmi_in1_edid_mem",  
         "generator",
         "checker",
+        "analyzer"
     }
     csr_map_update(BaseSoC.csr_map, csr_peripherals)
 
@@ -582,14 +586,14 @@ class VideoOverlaySoC(BaseSoC):
 
         out_dram_port = self.sdram.crossbar.get_port(mode="read", cd="pix_o", dw=16)
         genlock_from_input = Signal()
-        self.submodules.hdmi_out0 = VideoOutCore(out_dram_port, mode="ycbcr422", fifo_depth=512, genlock=True, genlock_signal=genlock_from_input)
-        # we should need to access the .core signals as a CSR, right?
+        self.submodules.hdmi_core_out0 = VideoOutCore(out_dram_port, mode="ycbcr422", fifo_depth=512, genlock=True, genlock_signal=genlock_from_input)
+
         vsync = Signal()
         vsync_r = Signal()
         new_frame = Signal()
-        self.comb += vsync.eq(self.hdmi_in0.syncpol.vsync)
-        self.comb += new_frame.eq(vsync & ~vsync_r)  # pulses high on new frame
+        self.sync.pix_o += vsync.eq(self.hdmi_in0.syncpol.vsync)
         self.sync.pix_o += vsync_r.eq(vsync)
+        self.comb += new_frame.eq(vsync & ~vsync_r)  # pulses high on new frame
         self.comb += genlock_from_input.eq(new_frame)
 
         ycbcr422to444 = ClockDomainsRenamer("pix_o")(YCbCr422to444())
@@ -604,14 +608,14 @@ class VideoOverlaySoC(BaseSoC):
         core_source_data_d = Signal(16)
         sync_cd = getattr(self.sync, out_dram_port.cd)
         sync_cd += [
-            de_r.eq(self.hdmi_out0.source.de),
-            core_source_valid_d.eq(self.hdmi_out0.source.valid),
-            core_source_data_d.eq(self.hdmi_out0.source.data),
+            de_r.eq(self.hdmi_core_out0.source.de),
+            core_source_valid_d.eq(self.hdmi_core_out0.source.valid),
+            core_source_data_d.eq(self.hdmi_core_out0.source.data),
         ]
 
         self.comb += [
-            self.hdmi_out0.source.ready.eq(1),  # always ready, no flow control
-            ycbcr422to444.reset.eq(self.hdmi_out0.source.de & ~de_r),
+            self.hdmi_core_out0.source.ready.eq(1),  # always ready, no flow control
+            ycbcr422to444.reset.eq(self.hdmi_core_out0.source.de & ~de_r),
             ycbcr422to444.sink.valid.eq(core_source_valid_d),
             ycbcr422to444.sink.y.eq(core_source_data_d[:8]),
             ycbcr422to444.sink.cb_cr.eq(core_source_data_d[8:]),
@@ -622,9 +626,9 @@ class VideoOverlaySoC(BaseSoC):
         ]
         # timing
         self.comb += [
-            timing_delay.sink.de.eq(self.hdmi_out0.source.de),
-            timing_delay.sink.vsync.eq(self.hdmi_out0.source.vsync),
-            timing_delay.sink.hsync.eq(self.hdmi_out0.source.hsync),
+            timing_delay.sink.de.eq(self.hdmi_core_out0.source.de),
+            timing_delay.sink.vsync.eq(self.hdmi_core_out0.source.vsync),
+            timing_delay.sink.hsync.eq(self.hdmi_core_out0.source.hsync),
 
 #            driver.sink.de.eq(timing_delay.source.de),
 #            driver.sink.vsync.eq(timing_delay.source.vsync),
@@ -648,15 +652,18 @@ class VideoOverlaySoC(BaseSoC):
 
             encoder_red.d.eq(ycbcr2rgb.source.r),
             encoder_red.de.eq(1),
-            encoder_red.c.eq(red_c),
+#            encoder_red.c.eq(red_c),
+            encoder_red.c.eq(0),
 
             encoder_grn.d.eq(ycbcr2rgb.source.g),
             encoder_grn.de.eq(1),
-            encoder_grn.c.eq(grn_c),
+#            encoder_grn.c.eq(grn_c),
+            encoder_grn.c.eq(0),
 
             encoder_blu.d.eq(ycbcr2rgb.source.b),
             encoder_blu.de.eq(1),
-            encoder_blu.c.eq(blu_c),
+#            encoder_blu.c.eq(blu_c),
+            encoder_blu.c.eq(0),
         ]
 
         # TODO: hdmi out 1 to hdmi out 0 injection
@@ -677,19 +684,44 @@ class VideoOverlaySoC(BaseSoC):
             c2_pix_o.eq(self.hdmi_in0.syncpol.c2)
         ]
 
+        hcounter_pix_o = Signal(hbits)
+        vcounter_pix_o = Signal(vbits)
+        rect_on = Signal()
+        self.comb += rect_on.eq(((hcounter_pix_o > 950) & (hcounter_pix_o < 970) & (vcounter_pix_o > 520) & (vcounter_pix_o < 540))  == 1)
+
         self.sync.pix_o += [
-            If( (self.hdmi_out0.timing.hcounter > 100) & (self.hdmi_out0.timing.hcounter < 400) &
-                (self.hdmi_out0.timing.vcounter > 100) & (self.hdmi_out0.timing.vcounter < 400),
+            hcounter_pix_o.eq(self.hdmi_core_out0.timing.hcounter),  # this is not actually needed
+            vcounter_pix_o.eq(self.hdmi_core_out0.timing.vcounter),
+
+            If(rect_on,
                     self.hdmi_out0_phy.sink.c0.eq(encoder_blu.out),
                     self.hdmi_out0_phy.sink.c1.eq(encoder_grn.out),
                     self.hdmi_out0_phy.sink.c2.eq(encoder_red.out),
-                ).Else(
+            ).Else(
                     self.hdmi_out0_phy.sink.c0.eq(c0_pix_o),
                     self.hdmi_out0_phy.sink.c1.eq(c1_pix_o),
                     self.hdmi_out0_phy.sink.c2.eq(c2_pix_o),
             )
         ]
 
+        # analyzer
+        from litex.soc.cores.uart import UARTWishboneBridge
+        from litescope import LiteScopeAnalyzer
+
+        self.submodules.bridge = UARTWishboneBridge(
+            platform.request("serial",1), self.clk_freq, baudrate=3000000)
+        self.add_wb_master(self.bridge.wishbone)
+
+        analyzer_signals = [
+            hcounter_pix_o,
+            vcounter_pix_o,
+            new_frame,
+            rect_on,
+        ]
+        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 512, cd="pix_o", cd_ratio=2)
+
+    def do_exit(self, vns):
+        self.analyzer.export_csv(vns, "test/analyzer.csv")
 """
         # litescope
         litescope_serial = platform.request("serial", 1)

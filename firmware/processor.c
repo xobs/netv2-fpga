@@ -61,7 +61,7 @@ References:
  * 720p and TV modes - https://www.mythtv.org/wiki/Modeline_Database
 
 */
-static const struct video_timing video_modes[PROCESSOR_MODE_COUNT] = {
+const struct video_timing video_modes[PROCESSOR_MODE_COUNT] = {
 	// 640x480 @ 72Hz (VESA) hsync: 37.9kHz
 	// ModeLine "640x480"    31.5  640  664  704  832    480  489  491  520
 	//                                24   40  <192          9   2   <40
@@ -481,7 +481,7 @@ void processor_start(int mode)
 
 	printf(".");
 #ifdef CSR_HDMI_IN0_BASE
-	mmcm_config_for_clock(m->pixel_clock);
+       	mmcm_config_for_clock(m->pixel_clock);
 #endif
 	printf(".");
 	fb_set_mode(m);
@@ -506,6 +506,7 @@ void processor_start(int mode)
 #ifdef CSR_HDMI_IN1_BASE
 	hdmi_in1_edid_hpd_en_write(1);
 #endif
+
 }
 
 void processor_set_hdmi_out0_source(int source) {
@@ -531,8 +532,8 @@ char * processor_get_source_name(int source) {
 
 void processor_update(void)
 {
+  
 #ifdef CSR_HDMI_OUT0_BASE
-#error "not here!"
 	/*  hdmi_out0 */
 #ifdef CSR_HDMI_IN0_BASE
 	if(processor_hdmi_out0_source == VIDEO_IN_HDMI_IN0)

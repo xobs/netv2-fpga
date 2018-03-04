@@ -22,8 +22,10 @@
 #include "hdmi_out0.h"
 #include "bist.h"
 #include "dump.h"
+#include "edid.h"
 
 int status_enabled;
+extern const struct video_timing video_modes[];
 
 static void help_video_matrix(void)
 {
@@ -786,6 +788,32 @@ void ci_service(void)
 		} else if(strcmp(token, "dma") == 0 ) {
 		  wprintf("initiating DMA on HDMI1\r\n");
 		  hdmi_in1_dma_ev_enable_write(0x3);
+		} else if(strcmp(token, "rect") == 0 ) {
+		  wprintf("enabling video_out0 writing\r\n");
+		  hdmi_core_out0_initiator_enable_write(0);
+		  
+		  const struct video_timing *m = &video_modes[11];
+		  m = &video_modes[11];
+		  hdmi_core_out0_initiator_base_write(hdmi_in1_framebuffer_base(hdmi_in1_fb_index));
+		  
+		  hdmi_core_out0_initiator_hres_write(m->h_active);
+		  hdmi_core_out0_initiator_hsync_start_write(m->h_active + m->h_sync_offset);
+		  hdmi_core_out0_initiator_hsync_end_write(m->h_active + m->h_sync_offset + m->h_sync_width);
+		  hdmi_core_out0_initiator_hscan_write(m->h_active + m->h_blanking);
+		  hdmi_core_out0_initiator_vres_write(m->v_active);
+		  hdmi_core_out0_initiator_vsync_start_write(m->v_active + m->v_sync_offset);
+		  hdmi_core_out0_initiator_vsync_end_write(m->v_active + m->v_sync_offset + m->v_sync_width);
+		  hdmi_core_out0_initiator_vscan_write(m->v_active + m->v_blanking);
+		  
+		  hdmi_core_out0_initiator_length_write(m->h_active*m->v_active*2);
+
+		  wprintf("out hres %d\r\n", hdmi_core_out0_initiator_hres_read());
+		  wprintf("out vres %d\r\n", hdmi_core_out0_initiator_vres_read());
+		  wprintf("out length %d\r\n", hdmi_core_out0_initiator_length_read());
+
+		  hdmi_core_out0_initiator_enable_write(1);		  
+		} else if(strcmp(token, "rectoff") == 0 ) {
+		  hdmi_core_out0_initiator_enable_write(0);
 		} else
 			help_debug();
 	} else {

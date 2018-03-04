@@ -138,7 +138,7 @@ void hdmi_in1_init_video(int hres, int vres)
 	hdmi_in1_next_fb_index = 2;
 
 	hdmi_in1_dma_ev_pending_write(hdmi_in1_dma_ev_pending_read());
-	//	hdmi_in1_dma_ev_enable_write(0x3);
+	hdmi_in1_dma_ev_enable_write(0x3);
 	mask = irq_getmask();
 	mask |= 1 << HDMI_IN1_INTERRUPT;
 	printf( "irq mask: %x\n", mask );
