@@ -708,8 +708,9 @@ class VideoOverlaySoC(BaseSoC):
         from litex.soc.cores.uart import UARTWishboneBridge
         from litescope import LiteScopeAnalyzer
 
+        #            platform.request("serial",1), self.clk_freq, baudrate=3000000)
         self.submodules.bridge = UARTWishboneBridge(
-            platform.request("serial",1), self.clk_freq, baudrate=3000000)
+            platform.request("serial",1), self.clk_freq, baudrate=256000)
         self.add_wb_master(self.bridge.wishbone)
 
         analyzer_signals = [
@@ -718,7 +719,7 @@ class VideoOverlaySoC(BaseSoC):
             new_frame,
             rect_on,
         ]
-        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 512, cd="pix_o", cd_ratio=2)
+        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 256, cd="pix_o", cd_ratio=4)
 
     def do_exit(self, vns):
         self.analyzer.export_csv(vns, "test/analyzer.csv")
