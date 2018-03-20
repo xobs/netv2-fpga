@@ -799,7 +799,7 @@ void ci_service(void)
 		  hdmi_core_out0_initiator_hres_write(m->h_active);
 		  hdmi_core_out0_initiator_hsync_start_write(m->h_active + m->h_sync_offset);
 		  hdmi_core_out0_initiator_hsync_end_write(m->h_active + m->h_sync_offset + m->h_sync_width);
-		  hdmi_core_out0_initiator_hscan_write(m->h_active + m->h_blanking);
+		  hdmi_core_out0_initiator_hscan_write(m->h_active + m->h_blanking - 1);
 		  hdmi_core_out0_initiator_vres_write(m->v_active);
 		  hdmi_core_out0_initiator_vsync_start_write(m->v_active + m->v_sync_offset);
 		  hdmi_core_out0_initiator_vsync_end_write(m->v_active + m->v_sync_offset + m->v_sync_width);
@@ -807,11 +807,21 @@ void ci_service(void)
 		  
 		  hdmi_core_out0_initiator_length_write(m->h_active*m->v_active*2);
 
-		  wprintf("out hres %d\r\n", hdmi_core_out0_initiator_hres_read());
-		  wprintf("out vres %d\r\n", hdmi_core_out0_initiator_vres_read());
+		  rectangle_hrect_start_write(900);
+		  rectangle_hrect_end_write(920);
+		  rectangle_vrect_start_write(300);
+		  rectangle_vrect_end_write(320);
+
+		  wprintf("out hres %d, hscan %d\r\n", hdmi_core_out0_initiator_hres_read(), hdmi_core_out0_initiator_hscan_read());
+		  wprintf("out vres %d, vscan %d\r\n", hdmi_core_out0_initiator_vres_read(), hdmi_core_out0_initiator_vscan_read());
 		  wprintf("out length %d\r\n", hdmi_core_out0_initiator_length_read());
 
-		  hdmi_core_out0_initiator_enable_write(1);		  
+		  hdmi_core_out0_initiator_enable_write(1);
+		} else if(strcmp(token, "rset") == 0 ) {
+		  rectangle_hrect_start_write((unsigned short) strtoul(get_token(&str), NULL, 0));
+		  rectangle_hrect_end_write((unsigned short) strtoul(get_token(&str), NULL, 0));
+		  rectangle_vrect_start_write((unsigned short) strtoul(get_token(&str), NULL, 0));
+		  rectangle_vrect_end_write((unsigned short) strtoul(get_token(&str), NULL, 0));
 		} else if(strcmp(token, "rectoff") == 0 ) {
 		  hdmi_core_out0_initiator_enable_write(0);
 		} else

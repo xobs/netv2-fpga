@@ -42,6 +42,8 @@ from litevideo.csc.ycbcr2rgb import YCbCr2RGB
 from litevideo.csc.ycbcr422to444 import YCbCr422to444
 from litevideo.output.hdmi.encoder import Encoder
 
+from litex.soc.interconnect.csr import *
+
 _io = [
     ("clk50", 0, Pins("J19"), IOStandard("LVCMOS33")),
 
@@ -491,6 +493,20 @@ class VideoSoC(BaseSoC):
     def do_exit(self, vns):
         self.analyzer.export_csv(vns, "test/analyzer.csv")
 
+class RectOpening(Module, AutoCSR):
+    def __init__(self, hcounter, vcounter):
+
+        self.hrect_start = CSRStorage(12)
+        self.hrect_end = CSRStorage(12)
+        self.vrect_start = CSRStorage(12)
+        self.vrect_end = CSRStorage(12)
+
+        self.rect_on = Signal()
+
+        #        self.comb += rect_on.eq(((hcounter_pix_o > 900) & (hcounter_pix_o < 910) & (vcounter_pix_o > 300) & (vcounter_pix_o < 310))  == 1)
+        self.comb += self.rect_on.eq(((hcounter > self.hrect_start.storage) & (hcounter < self.hrect_end.storage) &
+                                      (vcounter > self.vrect_start.storage) & (vcounter < self.vrect_end.storage))  == 1)
+
 
 class VideoOverlaySoC(BaseSoC):
     csr_peripherals = {
@@ -503,6 +519,7 @@ class VideoOverlaySoC(BaseSoC):
         "hdmi_in1_edid_mem",  
         "generator",
         "checker",
+        "rectangle",
         "analyzer"
     }
     csr_map_update(BaseSoC.csr_map, csr_peripherals)
@@ -584,7 +601,7 @@ class VideoOverlaySoC(BaseSoC):
         #self.submodules.dma_reader = ClockDomainsRenamer({"pix" : "pix_o"})(DMAControl(dma_reader))
 
 
-        out_dram_port = self.sdram.crossbar.get_port(mode="read", cd="pix_o", dw=16)
+        out_dram_port = self.sdram.crossbar.get_port(mode="read", cd="pix_o", dw=16, reverse=True)
         genlock_from_input = Signal()
         self.submodules.hdmi_core_out0 = VideoOutCore(out_dram_port, mode="ycbcr422", fifo_depth=512, genlock=True, genlock_signal=genlock_from_input)
 
@@ -595,6 +612,8 @@ class VideoOverlaySoC(BaseSoC):
         self.sync.pix_o += vsync_r.eq(vsync)
         self.comb += new_frame.eq(vsync & ~vsync_r)  # pulses high on new frame
         self.comb += genlock_from_input.eq(new_frame)
+        hsync = Signal()
+        self.sync.pix_o += hsync.eq(self.hdmi_in0.syncpol.hsync)
 
         ycbcr422to444 = ClockDomainsRenamer("pix_o")(YCbCr422to444())
         ycbcr2rgb = ClockDomainsRenamer("pix_o")(YCbCr2RGB())
@@ -687,7 +706,9 @@ class VideoOverlaySoC(BaseSoC):
         hcounter_pix_o = Signal(hbits)
         vcounter_pix_o = Signal(vbits)
         rect_on = Signal()
-        self.comb += rect_on.eq(((hcounter_pix_o > 950) & (hcounter_pix_o < 970) & (vcounter_pix_o > 520) & (vcounter_pix_o < 540))  == 1)
+
+        self.submodules.rectangle = rectangle = RectOpening(hcounter_pix_o, vcounter_pix_o)
+        self.comb += rect_on.eq(rectangle.rect_on)
 
         self.sync.pix_o += [
             hcounter_pix_o.eq(self.hdmi_core_out0.timing.hcounter),  # this is not actually needed
@@ -718,8 +739,12 @@ class VideoOverlaySoC(BaseSoC):
             vcounter_pix_o,
             new_frame,
             rect_on,
+            c0_pix_o,
+            encoder_blu.out,
+            hsync,
+            self.hdmi_core_out0.timing.source.hsync,
         ]
-        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 256, cd="pix_o", cd_ratio=4)
+        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 256, cd="pix_o", cd_ratio=2)
 
     def do_exit(self, vns):
         self.analyzer.export_csv(vns, "test/analyzer.csv")
