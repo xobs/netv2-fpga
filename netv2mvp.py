@@ -310,11 +310,11 @@ class CRG(Module):
 
 
 class BaseSoC(SoCSDRAM):
-    csr_peripherals = {
+    csr_peripherals = [
         "ddrphy",
         "dna",
         "xadc",
-    }
+    ]
     csr_map_update(SoCSDRAM.csr_map, csr_peripherals)
 
     def __init__(self, platform, **kwargs):
@@ -358,13 +358,13 @@ class BaseSoC(SoCSDRAM):
 
 
 class PCIeSoC(BaseSoC):
-    csr_map = {
+    csr_map = [
         "pcie_phy":        20,
         "dma":             21,
         "msi":             22,
         "dram_dma_writer": 23,
         "dram_dma_reader": 24
-    }
+    ]
     csr_map.update(BaseSoC.csr_map)
 
     BaseSoC.mem_map["csr"] = 0x00000000
@@ -421,13 +421,13 @@ class PCIeSoC(BaseSoC):
         tools.write_to_file(os.path.join("software", "pcie", "kernel", "csr.h"), csr_header)
 
 class VideoSoC(BaseSoC):
-    csr_peripherals = {
+    csr_peripherals = [
         "hdmi_out0",
         "hdmi_in0",
         "hdmi_in0_freq",
         "hdmi_in0_edid_mem",
         "analyzer"
-    }
+    ]
     csr_map_update(BaseSoC.csr_map, csr_peripherals)
 
     interrupt_map = {
@@ -519,7 +519,7 @@ class RectOpening(Module, AutoCSR):
 
 
 class VideoOverlaySoC(BaseSoC):
-    csr_peripherals = {
+    csr_peripherals = [
         "hdmi_core_out0",
         "hdmi_in0",
         "hdmi_in0_freq",
@@ -529,7 +529,7 @@ class VideoOverlaySoC(BaseSoC):
         "hdmi_in1_edid_mem",  
         "rectangle",
         "analyzer"
-    }
+    ]
     csr_map_update(BaseSoC.csr_map, csr_peripherals)
 
     interrupt_map = {
@@ -781,14 +781,14 @@ class VideoOverlaySoC(BaseSoC):
 
 
 class VideoRawDMALoopbackSoC(BaseSoC):
-    csr_peripherals = {
+    csr_peripherals = [
         "hdmi_out0",
         "hdmi_in0",
         "hdmi_in0_freq",
         "hdmi_in0_edid_mem",
         "dma_writer",
         "dma_reader"
-    }
+    ]
     csr_map_update(BaseSoC.csr_map, csr_peripherals)
 
     def __init__(self, platform, *args, **kwargs):
