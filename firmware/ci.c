@@ -807,10 +807,10 @@ void ci_service(void)
 		  
 		  hdmi_core_out0_initiator_length_write(m->h_active*m->v_active*2);
 
-		  rectangle_hrect_start_write(900);
-		  rectangle_hrect_end_write(920);
-		  rectangle_vrect_start_write(300);
-		  rectangle_vrect_end_write(320);
+		  rectangle_hrect_start_write(200);
+		  rectangle_hrect_end_write(1200);
+		  rectangle_vrect_start_write(200);
+		  rectangle_vrect_end_write(800);
 
 		  wprintf("out hres %d, hscan %d\r\n", hdmi_core_out0_initiator_hres_read(), hdmi_core_out0_initiator_hscan_read());
 		  wprintf("out vres %d, vscan %d\r\n", hdmi_core_out0_initiator_vres_read(), hdmi_core_out0_initiator_vscan_read());

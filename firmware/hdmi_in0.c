@@ -24,7 +24,7 @@ int hdmi_in0_fb_index;
 #define HDMI_IN0_FRAMEBUFFERS_SIZE (1920*1080*2)
 
 //#define CLEAN_COMMUTATION
-//#define DEBUG
+#define DEBUG
 
 #define HDMI_IN0_PHASE_ADJUST_WER_THRESHOLD 10
 
@@ -49,6 +49,7 @@ void hdmi_in0_isr(void)
 	int expected_length;
 	unsigned int address_min, address_max;
 
+	printf ("+");
 	address_min = HDMI_IN0_FRAMEBUFFERS_BASE & 0x0fffffff;
 	address_max = address_min + HDMI_IN0_FRAMEBUFFERS_SIZE*FRAMEBUFFER_COUNT;
 	if((hdmi_in0_dma_slot0_status_read() == DVISAMPLER_SLOT_PENDING)

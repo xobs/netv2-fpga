@@ -35,22 +35,6 @@ int main(void)
 	processor_update();
 	processor_start(config_get(CONFIG_KEY_RESOLUTION));
 
-#ifdef CSR_DMA_WRITER_BASE
-#error "not here!"
-	// do it here to be sure values are stabilized when we'll use them
-	dma_writer_slot0_base_write(MAIN_RAM_BASE + 0x1000000);
-	dma_writer_slot1_base_write(MAIN_RAM_BASE + 0x2000000);
-	dma_writer_length_write(2200*1125*4);
-#endif
-
-#ifdef CSR_DMA_READER_BASE
-#error "not here!"
-	// do it here to be sure values are stabilized when we'll use them
-	dma_reader_slot0_base_write(MAIN_RAM_BASE + 0x1000000);
-	dma_reader_slot1_base_write(MAIN_RAM_BASE + 0x2000000);
-	dma_reader_length_write(2200*1125*4);
-#endif
-
 	ci_prompt();
 
 	printf( "hdmi_in1_frame_overflow_read %x\n", hdmi_in1_frame_overflow_read() );
@@ -62,11 +46,14 @@ int main(void)
 	printf( "hdmi_in1_dma_ev_status_read %x\n", hdmi_in1_dma_ev_status_read() );
 	printf( "hdmi_in1_dma_ev_pending_read %x\n", hdmi_in1_dma_ev_pending_read() );
 	printf( "hdmi_in1_dma_ev_enable_read %x\n", hdmi_in1_dma_ev_enable_read() );
+
+	processor_hdmi_out0_source = VIDEO_IN_HDMI_IN1;  // this is hard-wired in this scenario
 	
 	while(1) {
 		processor_service();
 		ci_service();
-		pattern_service();
+		//		pattern_service();  // don't use the pattern generator, save some bandwidth
+		flush_l2_cache();
 	}
 
 	return 0;

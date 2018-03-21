@@ -585,7 +585,7 @@ void processor_service(void)
 {
 	const struct video_timing *m = &video_modes[processor_mode];
 #ifdef CSR_HDMI_IN0_BASE
-	hdmi_in0_service(m->pixel_clock);
+	hdmi_in0_service(m->pixel_clock);  // HDMI in 0 is a passthrough
 #endif
 #ifdef CSR_HDMI_IN1_BASE
 	hdmi_in1_service(m->pixel_clock);

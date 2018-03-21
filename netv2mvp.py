@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+
+## IMPORTANT: PYTHONHASHSEED should be set to "0" for best validation match
+
 import sys
 import os
 
@@ -194,6 +197,13 @@ class Platform(XilinxPlatform):
                                 toolchain=toolchain)
 
         self.add_platform_command(
+            "create_clock -name clk50 -period 20.0 [get_nets clk50]")
+        self.add_platform_command(
+            "create_clock -name hdmi_in0_clk_p -period 6.734006734006734 [get_nets hdmi_in0_clk_p]")
+        self.add_platform_command(
+            "create_clock -name hdmi_in1_clk_p -period 6.734006734006734 [get_nets hdmi_in1_clk_p]")
+
+        self.add_platform_command(
             "set_property CONFIG_VOLTAGE 3.3 [current_design]")
         self.add_platform_command(
             "set_property CFGBVS VCCO [current_design]")
@@ -212,9 +222,9 @@ class Platform(XilinxPlatform):
              "-loadbit \"up 0x0 {build_name}.bit\" -file {build_name}.bin"]
         self.programmer = programmer
 
-        self.add_platform_command("""
-create_clock -name pcie_phy_clk -period 10.0 [get_pins {{pcie_phy/pcie_support_i/pcie_i/inst/inst/gt_top_i/pipe_wrapper_i/pipe_lane[0].gt_wrapper_i/gtp_channel.gtpe2_channel_i/TXOUTCLK}}]
-""")
+#        self.add_platform_command("""
+#create_clock -name pcie_phy_clk -period 10.0 [get_pins {{pcie_phy/pcie_support_i/pcie_i/inst/inst/gt_top_i/pipe_wrapper_i/pipe_lane[0].gt_wrapper_i/gtp_channel.gtpe2_channel_i/TXOUTCLK}}]
+#""")
 
     def create_programmer(self):
         if self.programmer == "vivado":
@@ -517,8 +527,6 @@ class VideoOverlaySoC(BaseSoC):
         "hdmi_in1",
         "hdmi_in1_freq",
         "hdmi_in1_edid_mem",  
-        "generator",
-        "checker",
         "rectangle",
         "analyzer"
     }
@@ -535,13 +543,6 @@ class VideoOverlaySoC(BaseSoC):
         # # #
 
         pix_freq = 148.50e6
-
-        # bist
-        generator_port = self.sdram.crossbar.get_port(cd="sys")  # mode="write"
-        self.submodules.generator = LiteDRAMBISTGenerator(generator_port, random=True)
-
-        checker_port = self.sdram.crossbar.get_port(cd="sys")  # mode="read"
-        self.submodules.checker = LiteDRAMBISTChecker(checker_port, random=True)
 
         # hdmi in 0 (raw tmds)
         hdmi_in0_pads = platform.request("hdmi_in", 0)
@@ -878,6 +879,10 @@ class VideoRawDMALoopbackSoC(BaseSoC):
 
 
 def main():
+    if os.environ['PYTHONHASHSEED'] != "0":
+        print( "PYTHONHASHEED must be 0 for consistent validation results. Failing to set this results in non-deterministic compilation results")
+        exit()
+
     platform = Platform()
     if len(sys.argv) < 2:
         print("missing target (base or pcie or video or video_overlay or video_raw_dma_loopback)")
