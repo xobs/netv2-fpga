@@ -818,10 +818,14 @@ void ci_service(void)
 
 		  hdmi_core_out0_initiator_enable_write(1);
 		} else if(strcmp(token, "rset") == 0 ) {
+		  const struct video_timing *m = &video_modes[12];
+		  m = &video_modes[12];
+		  
 		  rectangle_hrect_start_write((unsigned short) strtoul(get_token(&str), NULL, 0));
 		  rectangle_hrect_end_write((unsigned short) strtoul(get_token(&str), NULL, 0));
-		  rectangle_vrect_start_write((unsigned short) strtoul(get_token(&str), NULL, 0));
-		  rectangle_vrect_end_write((unsigned short) strtoul(get_token(&str), NULL, 0));
+		  // vblank on top of frame so compensate in offset
+		  rectangle_vrect_start_write((unsigned short) strtoul(get_token(&str), NULL, 0) + m->v_blanking ); 
+		  rectangle_vrect_end_write((unsigned short) strtoul(get_token(&str), NULL, 0) + m->v_blanking );
 		} else if(strcmp(token, "rectoff") == 0 ) {
 		  hdmi_core_out0_initiator_enable_write(0);
 		} else

@@ -358,13 +358,13 @@ class BaseSoC(SoCSDRAM):
 
 
 class PCIeSoC(BaseSoC):
-    csr_map = [
+    csr_map = {
         "pcie_phy":        20,
         "dma":             21,
         "msi":             22,
         "dram_dma_writer": 23,
         "dram_dma_reader": 24
-    ]
+    }
     csr_map.update(BaseSoC.csr_map)
 
     BaseSoC.mem_map["csr"] = 0x00000000
@@ -575,6 +575,22 @@ class VideoOverlaySoC(BaseSoC):
         platform.add_platform_command(
             "set_property CLOCK_DEDICATED_ROUTE FALSE [get_nets hdmi_in_ibufds/ob]")
 
+        # extract timing info from HDMI input 0
+        self.hdmi_in0_timing = hdmi_in0_timing = stream.Endpoint(frame_timing_layout)
+        self.sync.pix_o += [
+            hdmi_in0_timing.de.eq(self.hdmi_in0.syncpol.de),
+            hdmi_in0_timing.hsync.eq(self.hdmi_in0.syncpol.hsync),
+            hdmi_in0_timing.vsync.eq(self.hdmi_in0.syncpol.vsync),
+            If(self.hdmi_in0.syncpol.valid_o,
+               hdmi_in0_timing.valid.eq(1),
+               )
+        ]
+#        self.hdmi_in0_timing = hdmi_in0_timing = stream.Endpoint(frame_timing_layout)
+#        cdc = stream.AsyncFIFO(self.hdmi_in0_timing.description, 2)
+#        cdc = ClockDomainsRenamer({"write" : self.hdmi_in0.clocking.cd_pix,
+#                                   "read": self.hdmi_in0.clocking.cd_pix_o})(cdc)
+
+
 
         # hdmi in 1
         hdmi_in1_pads = platform.request("hdmi_in", 1)
@@ -603,18 +619,7 @@ class VideoOverlaySoC(BaseSoC):
 
 
         out_dram_port = self.sdram.crossbar.get_port(mode="read", cd="pix_o", dw=16, reverse=True)
-        genlock_from_input = Signal()
-        self.submodules.hdmi_core_out0 = VideoOutCore(out_dram_port, mode="ycbcr422", fifo_depth=512, genlock=True, genlock_signal=genlock_from_input)
-
-        vsync = Signal()
-        vsync_r = Signal()
-        new_frame = Signal()
-        self.sync.pix_o += vsync.eq(self.hdmi_in0.syncpol.vsync)
-        self.sync.pix_o += vsync_r.eq(vsync)
-        self.comb += new_frame.eq(vsync & ~vsync_r)  # pulses high on new frame
-        self.comb += genlock_from_input.eq(new_frame)
-        hsync = Signal()
-        self.sync.pix_o += hsync.eq(self.hdmi_in0.syncpol.hsync)
+        self.submodules.hdmi_core_out0 = VideoOutCore(out_dram_port, mode="ycbcr422", fifo_depth=512, genlock_signal=hdmi_in0_timing)
 
         ycbcr422to444 = ClockDomainsRenamer("pix_o")(YCbCr422to444())
         ycbcr2rgb = ClockDomainsRenamer("pix_o")(YCbCr2RGB())
@@ -708,13 +713,36 @@ class VideoOverlaySoC(BaseSoC):
         vcounter_pix_o = Signal(vbits)
         rect_on = Signal()
 
+        in0_de = Signal()
+        in0_de_r = Signal()
+        in0_vsync = Signal()
+        in0_vsync_r = Signal()
+        in0_hsync = Signal()
+        in0_hsync_r = Signal()
+        self.sync.pix_o += [
+            in0_de.eq(self.hdmi_core_out0.timing.source.de),
+            in0_de_r.eq(in0_de),
+            in0_vsync.eq(self.hdmi_core_out0.timing.source.vsync),
+            in0_vsync_r.eq(in0_vsync),
+            in0_hsync.eq(self.hdmi_core_out0.timing.source.hsync),
+            in0_hsync_r.eq(in0_hsync),
+
+            If(in0_vsync & ~in0_vsync_r,
+               vcounter_pix_o.eq(0)
+               ).Elif(in0_hsync & ~ in0_hsync_r,
+                      vcounter_pix_o.eq(vcounter_pix_o + 1)
+                      ),
+            If(in0_de & ~in0_de_r,
+               hcounter_pix_o.eq(0),
+               ).Elif(in0_de,
+                      hcounter_pix_o.eq(hcounter_pix_o + 1)
+                      )
+        ]
+
         self.submodules.rectangle = rectangle = RectOpening(hcounter_pix_o, vcounter_pix_o)
         self.comb += rect_on.eq(rectangle.rect_on)
 
         self.sync.pix_o += [
-            hcounter_pix_o.eq(self.hdmi_core_out0.timing.hcounter),  # this is not actually needed
-            vcounter_pix_o.eq(self.hdmi_core_out0.timing.vcounter),
-
             If(rect_on,
                     self.hdmi_out0_phy.sink.c0.eq(encoder_blu.out),
                     self.hdmi_out0_phy.sink.c1.eq(encoder_grn.out),
@@ -737,15 +765,21 @@ class VideoOverlaySoC(BaseSoC):
 
         analyzer_signals = [
             hcounter_pix_o,
-            vcounter_pix_o,
-            new_frame,
             rect_on,
             c0_pix_o,
             encoder_blu.out,
-            hsync,
+            hdmi_in0_timing.hsync,
+            hdmi_in0_timing.vsync,
+            hdmi_in0_timing.de,
             self.hdmi_core_out0.timing.source.hsync,
+            self.hdmi_core_out0.source.valid,
+            self.hdmi_core_out0.timing.source.valid,
+            self.hdmi_core_out0.timing.source.de,
+            self.hdmi_core_out0.dma.source.valid,
+            self.hdmi_core_out0.source.ready,
+            self.hdmi_core_out0.dma.source.ready,
         ]
-        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 256, cd="pix_o", cd_ratio=2)
+        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 512, cd="pix_o", cd_ratio=2)
 
     def do_exit(self, vns):
         self.analyzer.export_csv(vns, "test/analyzer.csv")
@@ -879,8 +913,8 @@ class VideoRawDMALoopbackSoC(BaseSoC):
 
 
 def main():
-    if os.environ['PYTHONHASHSEED'] != "0":
-        print( "PYTHONHASHEED must be 0 for consistent validation results. Failing to set this results in non-deterministic compilation results")
+    if os.environ['PYTHONHASHSEED'] != "1":
+        print( "PYTHONHASHEED must be set to 1 for consistent validation results. Failing to set this results in non-deterministic compilation results")
         exit()
 
     platform = Platform()
