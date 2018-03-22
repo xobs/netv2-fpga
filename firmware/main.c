@@ -52,8 +52,7 @@ int main(void)
 	while(1) {
 		processor_service();
 		ci_service();
-		//		pattern_service();  // don't use the pattern generator, save some bandwidth
-		flush_l2_cache();
+		pattern_service();
 	}
 
 	return 0;
