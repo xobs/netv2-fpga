@@ -504,7 +504,7 @@ class VideoSoC(BaseSoC):
         self.analyzer.export_csv(vns, "test/analyzer.csv")
 
 class RectOpening(Module, AutoCSR):
-    def __init__(self, hcounter, vcounter):
+    def __init__(self, timing_stream):
 
         self.hrect_start = CSRStorage(12)
         self.hrect_end = CSRStorage(12)
@@ -512,6 +512,37 @@ class RectOpening(Module, AutoCSR):
         self.vrect_end = CSRStorage(12)
 
         self.rect_on = Signal()
+
+        # counter for pixel position based on the incoming HDMI0 stream.
+        # use this instead of programmed values because we want to sync to non-compliant data streams
+        self.hcounter = hcounter = Signal(hbits)
+        self.vcounter = vcounter = Signal(vbits)
+
+        in0_de = Signal()
+        in0_de_r = Signal()
+        in0_vsync = Signal()
+        in0_vsync_r = Signal()
+        in0_hsync = Signal()
+        in0_hsync_r = Signal()
+        self.sync += [  # rename this to the pix_o domain for the NeTV2 application
+            in0_de.eq(timing_stream.de),
+            in0_de_r.eq(in0_de),
+            in0_vsync.eq(timing_stream.vsync),
+            in0_vsync_r.eq(in0_vsync),
+            in0_hsync.eq(timing_stream.hsync),
+            in0_hsync_r.eq(in0_hsync),
+
+            If(in0_vsync & ~in0_vsync_r,
+               vcounter.eq(0)
+               ).Elif(in0_hsync & ~ in0_hsync_r,
+                      vcounter.eq(vcounter + 1)
+                      ),
+            If(in0_de & ~in0_de_r,
+               hcounter.eq(0),
+               ).Elif(in0_de,
+                      hcounter.eq(hcounter + 1)
+                      )
+        ]
 
         #        self.comb += rect_on.eq(((hcounter_pix_o > 900) & (hcounter_pix_o < 910) & (vcounter_pix_o > 300) & (vcounter_pix_o < 310))  == 1)
         self.comb += self.rect_on.eq(((hcounter > self.hrect_start.storage) & (hcounter < self.hrect_end.storage) &
@@ -575,7 +606,7 @@ class VideoOverlaySoC(BaseSoC):
         platform.add_platform_command(
             "set_property CLOCK_DEDICATED_ROUTE FALSE [get_nets hdmi_in_ibufds/ob]")
 
-        # extract timing info from HDMI input 0
+        # extract timing info from HDMI input 0, and put it into a stream that we can pass later on as a genlock object
         self.hdmi_in0_timing = hdmi_in0_timing = stream.Endpoint(frame_timing_layout)
         self.sync.pix_o += [
             hdmi_in0_timing.de.eq(self.hdmi_in0.syncpol.de),
@@ -585,12 +616,6 @@ class VideoOverlaySoC(BaseSoC):
                hdmi_in0_timing.valid.eq(1),
                )
         ]
-#        self.hdmi_in0_timing = hdmi_in0_timing = stream.Endpoint(frame_timing_layout)
-#        cdc = stream.AsyncFIFO(self.hdmi_in0_timing.description, 2)
-#        cdc = ClockDomainsRenamer({"write" : self.hdmi_in0.clocking.cd_pix,
-#                                   "read": self.hdmi_in0.clocking.cd_pix_o})(cdc)
-
-
 
         # hdmi in 1
         hdmi_in1_pads = platform.request("hdmi_in", 1)
@@ -612,14 +637,9 @@ class VideoOverlaySoC(BaseSoC):
             self.hdmi_in1.clocking.cd_pix5x.clk)
 
         #  hdmi out 1 (overlay ycbcr422)
-        #dma_reader = DMAReader(self.sdram.crossbar.get_port(mode="read", cd="pix_o"), dw=16)
-        #dma_reader = ClockDomainsRenamer("pix_o")(dma_reader)
-        #self.submodules += dma_reader
-        #self.submodules.dma_reader = ClockDomainsRenamer({"pix" : "pix_o"})(DMAControl(dma_reader))
-
 
         out_dram_port = self.sdram.crossbar.get_port(mode="read", cd="pix_o", dw=16, reverse=True)
-        self.submodules.hdmi_core_out0 = VideoOutCore(out_dram_port, mode="ycbcr422", fifo_depth=512, genlock_signal=hdmi_in0_timing)
+        self.submodules.hdmi_core_out0 = VideoOutCore(out_dram_port, mode="ycbcr422", fifo_depth=512, genlock_stream=hdmi_in0_timing)
 
         ycbcr422to444 = ClockDomainsRenamer("pix_o")(YCbCr422to444())
         ycbcr2rgb = ClockDomainsRenamer("pix_o")(YCbCr2RGB())
@@ -647,17 +667,12 @@ class VideoOverlaySoC(BaseSoC):
 
             ycbcr422to444.source.connect(ycbcr2rgb.sink),
 
-#            ycbcr2rgb.source.connect(driver.sink)
         ]
         # timing
         self.comb += [
             timing_delay.sink.de.eq(self.hdmi_core_out0.source.de),
             timing_delay.sink.vsync.eq(self.hdmi_core_out0.source.vsync),
             timing_delay.sink.hsync.eq(self.hdmi_core_out0.source.hsync),
-
-#            driver.sink.de.eq(timing_delay.source.de),
-#            driver.sink.vsync.eq(timing_delay.source.vsync),
-#            driver.sink.hsync.eq(timing_delay.source.hsync)
         ]
 
         self.submodules.encoder_red = encoder_red = ClockDomainsRenamer("pix_o")(Encoder())
@@ -677,27 +692,16 @@ class VideoOverlaySoC(BaseSoC):
 
             encoder_red.d.eq(ycbcr2rgb.source.r),
             encoder_red.de.eq(1),
-#            encoder_red.c.eq(red_c),
-            encoder_red.c.eq(0),
+            encoder_red.c.eq(0), # we promise to use this only during video areas, so "c" is always 0
 
             encoder_grn.d.eq(ycbcr2rgb.source.g),
             encoder_grn.de.eq(1),
-#            encoder_grn.c.eq(grn_c),
             encoder_grn.c.eq(0),
 
             encoder_blu.d.eq(ycbcr2rgb.source.b),
             encoder_blu.de.eq(1),
-#            encoder_blu.c.eq(blu_c),
             encoder_blu.c.eq(0),
         ]
-
-        # TODO: hdmi out 1 to hdmi out 0 injection
-        #self.comb += [
-            #ycbcr2rgb.source.valid
-            #ycbcr2rgb.source.r
-            #ycbcr2rgb.source.g
-            #ycbcr2rgb.source.b
-        #]
 
         # hdmi in to hdmi out
         c0_pix_o = Signal(10)
@@ -709,37 +713,9 @@ class VideoOverlaySoC(BaseSoC):
             c2_pix_o.eq(self.hdmi_in0.syncpol.c2)
         ]
 
-        hcounter_pix_o = Signal(hbits)
-        vcounter_pix_o = Signal(vbits)
         rect_on = Signal()
 
-        in0_de = Signal()
-        in0_de_r = Signal()
-        in0_vsync = Signal()
-        in0_vsync_r = Signal()
-        in0_hsync = Signal()
-        in0_hsync_r = Signal()
-        self.sync.pix_o += [
-            in0_de.eq(self.hdmi_core_out0.timing.source.de),
-            in0_de_r.eq(in0_de),
-            in0_vsync.eq(self.hdmi_core_out0.timing.source.vsync),
-            in0_vsync_r.eq(in0_vsync),
-            in0_hsync.eq(self.hdmi_core_out0.timing.source.hsync),
-            in0_hsync_r.eq(in0_hsync),
-
-            If(in0_vsync & ~in0_vsync_r,
-               vcounter_pix_o.eq(0)
-               ).Elif(in0_hsync & ~ in0_hsync_r,
-                      vcounter_pix_o.eq(vcounter_pix_o + 1)
-                      ),
-            If(in0_de & ~in0_de_r,
-               hcounter_pix_o.eq(0),
-               ).Elif(in0_de,
-                      hcounter_pix_o.eq(hcounter_pix_o + 1)
-                      )
-        ]
-
-        self.submodules.rectangle = rectangle = RectOpening(hcounter_pix_o, vcounter_pix_o)
+        self.submodules.rectangle = rectangle = ClockDomainsRenamer("pix_o")( RectOpening(hdmi_in0_timing) )
         self.comb += rect_on.eq(rectangle.rect_on)
 
         self.sync.pix_o += [
@@ -764,7 +740,7 @@ class VideoOverlaySoC(BaseSoC):
         self.add_wb_master(self.bridge.wishbone)
 
         analyzer_signals = [
-            hcounter_pix_o,
+            rectangle.hcounter,
             rect_on,
             c0_pix_o,
             encoder_blu.out,
