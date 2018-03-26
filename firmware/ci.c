@@ -792,8 +792,8 @@ void ci_service(void)
 		  wprintf("enabling video_out0 writing\r\n");
 		  hdmi_core_out0_initiator_enable_write(0);
 		  
-		  const struct video_timing *m = &video_modes[11];
-		  m = &video_modes[11];
+		  const struct video_timing *m = &video_modes[12];
+		  m = &video_modes[12];
 		  hdmi_core_out0_initiator_base_write(hdmi_in1_framebuffer_base(hdmi_in1_fb_index));
 		  
 		  hdmi_core_out0_initiator_hres_write(m->h_active);
@@ -831,8 +831,8 @@ void ci_service(void)
 		} else
 			help_debug();
 	} else {
-		if(status_enabled)
-			status_disable();
+	  //		if(status_enabled)
+	  //			status_disable();
 	}
 	ci_prompt();
 }

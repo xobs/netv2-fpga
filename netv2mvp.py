@@ -129,12 +129,16 @@ _io = [
     ("hdmi_in", 0,
         Subsignal("clk_p", Pins("L19"), IOStandard("TMDS_33"), Inverted()),
         Subsignal("clk_n", Pins("L20"), IOStandard("TMDS_33"), Inverted()),
-        Subsignal("data0_p", Pins("K21"), IOStandard("TMDS_33"), Inverted()),
+        Subsignal("data0_p", Pins("K21"), IOStandard("TMDS_33"), Inverted()),  # correct by design
         Subsignal("data0_n", Pins("K22"), IOStandard("TMDS_33"), Inverted()),
+#        Subsignal("data2_p", Pins("K21"), IOStandard("TMDS_33"), Inverted()),   # incorrect
+#        Subsignal("data2_n", Pins("K22"), IOStandard("TMDS_33"), Inverted()),
         Subsignal("data1_p", Pins("J20"), IOStandard("TMDS_33"), Inverted()),
         Subsignal("data1_n", Pins("J21"), IOStandard("TMDS_33"), Inverted()),
         Subsignal("data2_p", Pins("J22"), IOStandard("TMDS_33"), Inverted()),
         Subsignal("data2_n", Pins("H22"), IOStandard("TMDS_33"), Inverted()),
+#        Subsignal("data0_p", Pins("J22"), IOStandard("TMDS_33"), Inverted()),
+#        Subsignal("data0_n", Pins("H22"), IOStandard("TMDS_33"), Inverted()),
         Subsignal("scl", Pins("T18"), IOStandard("LVCMOS33")),
         Subsignal("sda", Pins("V18"), IOStandard("LVCMOS33")),
     ),
@@ -195,13 +199,6 @@ class Platform(XilinxPlatform):
     def __init__(self, toolchain="vivado", programmer="vivado"):
         XilinxPlatform.__init__(self, "xc7a35t-fgg484-2", _io,
                                 toolchain=toolchain)
-
-        self.add_platform_command(
-            "create_clock -name clk50 -period 20.0 [get_nets clk50]")
-        self.add_platform_command(
-            "create_clock -name hdmi_in0_clk_p -period 6.734006734006734 [get_nets hdmi_in0_clk_p]")
-        self.add_platform_command(
-            "create_clock -name hdmi_in1_clk_p -period 6.734006734006734 [get_nets hdmi_in1_clk_p]")
 
         self.add_platform_command(
             "set_property CONFIG_VOLTAGE 3.3 [current_design]")
@@ -312,7 +309,7 @@ class CRG(Module):
 class BaseSoC(SoCSDRAM):
     csr_peripherals = [
         "ddrphy",
-        "dna",
+#        "dna",
         "xadc",
     ]
     csr_map_update(SoCSDRAM.csr_map, csr_peripherals)
@@ -328,7 +325,7 @@ class BaseSoC(SoCSDRAM):
             **kwargs)
 
         self.submodules.crg = CRG(platform)
-        self.submodules.dna = dna.DNA()
+#        self.submodules.dna = dna.DNA()
         self.submodules.xadc = xadc.XADC()
 
         self.crg.cd_sys.clk.attr.add("keep")
@@ -356,152 +353,6 @@ class BaseSoC(SoCSDRAM):
         self.sync += sys_counter.eq(sys_counter + 1)
         self.comb += self.sys_led.eq(sys_counter[26])
 
-
-class PCIeSoC(BaseSoC):
-    csr_map = {
-        "pcie_phy":        20,
-        "dma":             21,
-        "msi":             22,
-        "dram_dma_writer": 23,
-        "dram_dma_reader": 24
-    }
-    csr_map.update(BaseSoC.csr_map)
-
-    BaseSoC.mem_map["csr"] = 0x00000000
-    BaseSoC.mem_map["rom"] = 0x20000000
-
-    def __init__(self, platform, **kwargs):
-        BaseSoC.__init__(self, platform, csr_data_width=32, **kwargs)
-
-        # pcie phy
-        self.submodules.pcie_phy = S7PCIEPHY(platform, platform.request("pcie_x2"))
-        platform.add_false_path_constraints(
-            self.crg.cd_sys.clk,
-            self.pcie_phy.cd_pcie.clk)
-
-        # pcie endpoint
-        self.submodules.pcie_endpoint = LitePCIeEndpoint(self.pcie_phy, with_reordering=True)
-
-        # pcie wishbone bridge
-        self.submodules.pcie_wishbone = LitePCIeWishboneBridge(self.pcie_endpoint, lambda a: 1)
-        self.add_wb_master(self.pcie_wishbone.wishbone)
-
-        # pcie dma
-        self.submodules.dma = LitePCIeDMA(self.pcie_phy, self.pcie_endpoint, with_loopback=True)
-        dram_dma_writer = DMAWriter(self.sdram.crossbar.get_port(mode="write", dw=64))
-        dram_dma_reader = DMAReader(self.sdram.crossbar.get_port(mode="read", dw=64))
-        self.submodules += dram_dma_writer, dram_dma_reader
-        self.submodules.dram_dma_writer = DMAControl(dram_dma_writer)
-        self.submodules.dram_dma_reader = DMAControl(dram_dma_reader)
-        self.comb += [
-            self.dma.source.connect(dram_dma_writer.sink),
-            dram_dma_reader.source.connect(self.dma.sink)
-        ]
-
-        # pcie msi
-        self.submodules.msi = LitePCIeMSI()
-        self.comb += self.msi.source.connect(self.pcie_phy.msi)
-        self.interrupts = {
-            "DMA_WRITER":    self.dma.writer.irq,
-            "DMA_READER":    self.dma.reader.irq
-        }
-        for i, (k, v) in enumerate(sorted(self.interrupts.items())):
-            self.comb += self.msi.irqs[i].eq(v)
-            self.add_constant(k + "_INTERRUPT", i)
-
-        # pcie led
-        pcie_counter = Signal(32)
-        self.sync.pcie += pcie_counter.eq(pcie_counter + 1)
-        self.comb += self.pcie_led.eq(pcie_counter[26])
-
-    def generate_software_header(self):
-        csr_header = get_csr_header(self.get_csr_regions(),
-                                    self.get_constants(),
-                                    with_access_functions=False)
-        tools.write_to_file(os.path.join("software", "pcie", "kernel", "csr.h"), csr_header)
-
-class VideoSoC(BaseSoC):
-    csr_peripherals = [
-        "hdmi_out0",
-        "hdmi_in0",
-        "hdmi_in0_freq",
-        "hdmi_in0_edid_mem",
-        "analyzer"
-    ]
-    csr_map_update(BaseSoC.csr_map, csr_peripherals)
-
-    interrupt_map = {
-        "hdmi_in0": 3,
-    }
-    interrupt_map.update(BaseSoC.interrupt_map)
-
-    def __init__(self, platform, *args, **kwargs):
-        BaseSoC.__init__(self, platform, *args, **kwargs)
-
-        # # #
-
-        pix_freq = 148.50e6
-
-        # hdmi in
-        hdmi_in0_pads = platform.request("hdmi_in", 0)
-        self.submodules.hdmi_in0_freq = FrequencyMeter(period=self.clk_freq)
-        self.submodules.hdmi_in0 = HDMIIn(hdmi_in0_pads,
-                                         self.sdram.crossbar.get_port(mode="write"),
-                                         fifo_depth=512,
-                                         device="xc7")
-        self.comb += self.hdmi_in0_freq.clk.eq(self.hdmi_in0.clocking.cd_pix.clk)
-        self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix.clk, period_ns(1*pix_freq))
-        self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix1p25x.clk, period_ns(1.25*pix_freq))
-        self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix5x.clk, period_ns(5*pix_freq))
-
-        self.platform.add_false_path_constraints(
-            self.crg.cd_sys.clk,
-            self.hdmi_in0.clocking.cd_pix.clk,
-            self.hdmi_in0.clocking.cd_pix1p25x.clk,
-            self.hdmi_in0.clocking.cd_pix5x.clk)
-
-        # hdmi out
-        hdmi_out0_dram_port = self.sdram.crossbar.get_port(mode="read", dw=16, cd="hdmi_out0_pix", reverse=True)
-        self.submodules.hdmi_out0 = VideoOut(platform.device,
-                                            platform.request("hdmi_out", 0),
-                                            hdmi_out0_dram_port,
-                                            "ycbcr422",
-                                            fifo_depth=4096)
-
-        self.platform.add_period_constraint(self.hdmi_out0.driver.clocking.cd_pix.clk, period_ns(1*pix_freq))
-        self.platform.add_period_constraint(self.hdmi_out0.driver.clocking.cd_pix5x.clk, period_ns(5*pix_freq))
-
-        self.platform.add_false_path_constraints(
-            self.crg.cd_sys.clk,
-            self.hdmi_out0.driver.clocking.cd_pix.clk,
-            self.hdmi_out0.driver.clocking.cd_pix5x.clk)
-
-        # hdmi over
-        self.comb += [
-            platform.request("hdmi_sda_over_up").eq(0),
-            platform.request("hdmi_sda_over_dn").eq(0),
-        ]
-
-        # analyzer
-        from litex.soc.cores.uart import UARTWishboneBridge
-        from litescope import LiteScopeAnalyzer
-
-        self.submodules.bridge = UARTWishboneBridge(
-            platform.request("serial_litescope"), self.clk_freq, baudrate=115200)
-        self.add_wb_master(self.bridge.wishbone)
-
-        analyzer_signals = [
-            self.hdmi_in0.data0_decod.valid_i,
-            self.hdmi_in0.data0_decod.input,
-            self.hdmi_in0.data1_decod.valid_i,
-            self.hdmi_in0.data1_decod.input,
-            self.hdmi_in0.data2_decod.valid_i,
-            self.hdmi_in0.data2_decod.input,
-        ]
-        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 2048, cd="hdmi_in0_pix", cd_ratio=2)
-
-    def do_exit(self, vns):
-        self.analyzer.export_csv(vns, "test/analyzer.csv")
 
 class RectOpening(Module, AutoCSR):
     def __init__(self, timing_stream):
@@ -580,17 +431,39 @@ class VideoOverlaySoC(BaseSoC):
         self.submodules.hdmi_in0_freq = FrequencyMeter(period=self.clk_freq)
         self.submodules.hdmi_in0 = HDMIIn(hdmi_in0_pads, device="xc7", split_mmcm=True)
         self.comb += self.hdmi_in0_freq.clk.eq(self.hdmi_in0.clocking.cd_pix.clk)
-        platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix.clk, period_ns(1*pix_freq))
-        platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix_o.clk, period_ns(1*pix_freq))
-        platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix1p25x.clk, period_ns(1.25*pix_freq))
-        platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix5x.clk, period_ns(5*pix_freq))
+#        platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix.clk, period_ns(1*pix_freq))
+#        platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix_o.clk, period_ns(1*pix_freq))
+#        platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix1p25x.clk, period_ns(1.25*pix_freq))
+#        platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix5x.clk, period_ns(5*pix_freq))
 
-        platform.add_false_path_constraints(
+        self.platform.add_false_path_constraints(
             self.crg.cd_sys.clk,
-            self.hdmi_in0.clocking.cd_pix.clk,
-            self.hdmi_in0.clocking.cd_pix_o.clk,
-            self.hdmi_in0.clocking.cd_pix1p25x.clk,
-            self.hdmi_in0.clocking.cd_pix5x.clk)
+            self.hdmi_in0.clocking.cd_pix.clk
+        )
+        self.platform.add_false_path_constraints(
+            self.crg.cd_sys.clk,
+            self.hdmi_in0.clocking.cd_pix1p25x.clk
+        )
+        self.platform.add_false_path_constraints(
+            self.crg.cd_sys.clk,
+            self.hdmi_in0.clocking.cd_pix5x.clk
+        )
+        self.platform.add_false_path_constraints(
+            self.crg.cd_sys.clk,
+            self.hdmi_in0.clocking.cd_pix_o.clk
+        )
+        self.platform.add_false_path_constraints(
+            self.crg.cd_sys.clk,
+            self.hdmi_in0.clocking.cd_pix5x_o.clk
+        )
+
+        # self.platform.add_false_path_constraints(
+        #     self.crg.cd_sys.clk,
+        #     self.hdmi_in0.clocking.cd_pix.clk,
+        #     self.hdmi_in0.clocking.cd_pix_o.clk,
+        #     self.hdmi_in0.clocking.cd_pix1p25x.clk,
+        #     self.hdmi_in0.clocking.cd_pix5x.clk)
+
 
         hdmi_out0_pads = platform.request("hdmi_out", 0)
         self.submodules.hdmi_out0_clk_gen = S7HDMIOutEncoderSerializer(hdmi_out0_pads.clk_p, hdmi_out0_pads.clk_n, bypass_encoder=True)
@@ -613,8 +486,10 @@ class VideoOverlaySoC(BaseSoC):
             hdmi_in0_timing.hsync.eq(self.hdmi_in0.syncpol.hsync),
             hdmi_in0_timing.vsync.eq(self.hdmi_in0.syncpol.vsync),
             If(self.hdmi_in0.syncpol.valid_o,
-               hdmi_in0_timing.valid.eq(1),
-               )
+                hdmi_in0_timing.valid.eq(1),
+            ).Else(
+                hdmi_in0_timing.valid.eq(0),
+            )
         ]
 
         # hdmi in 1
@@ -626,15 +501,82 @@ class VideoOverlaySoC(BaseSoC):
                                          device="xc7",
                                          split_mmcm=False)
         self.comb += self.hdmi_in1_freq.clk.eq(self.hdmi_in1.clocking.cd_pix.clk)
-        platform.add_period_constraint(self.hdmi_in1.clocking.cd_pix.clk, period_ns(1*pix_freq))
-        platform.add_period_constraint(self.hdmi_in1.clocking.cd_pix1p25x.clk, period_ns(1.25*pix_freq))
-        platform.add_period_constraint(self.hdmi_in1.clocking.cd_pix5x.clk, period_ns(5*pix_freq))
+#        platform.add_period_constraint(self.hdmi_in1.clocking.cd_pix.clk, period_ns(1*pix_freq))
+#        platform.add_period_constraint(self.hdmi_in1.clocking.cd_pix1p25x.clk, period_ns(1.25*pix_freq))
+#        platform.add_period_constraint(self.hdmi_in1.clocking.cd_pix5x.clk, period_ns(5*pix_freq))
 
-        platform.add_false_path_constraints(
+        self.platform.add_false_path_constraints(
             self.crg.cd_sys.clk,
-            self.hdmi_in1.clocking.cd_pix.clk,
-            self.hdmi_in1.clocking.cd_pix1p25x.clk,
-            self.hdmi_in1.clocking.cd_pix5x.clk)
+            self.hdmi_in1.clocking.cd_pix.clk
+        )
+        self.platform.add_false_path_constraints(
+            self.crg.cd_sys.clk,
+            self.hdmi_in1.clocking.cd_pix1p25x.clk
+        )
+        self.platform.add_false_path_constraints(
+            self.crg.cd_sys.clk,
+            self.hdmi_in1.clocking.cd_pix5x.clk
+        )
+        # self.platform.add_false_path_constraints(
+        #     self.crg.cd_sys.clk,
+        #     self.hdmi_in1.clocking.cd_pix1p25x.clk,
+        #     self.hdmi_in1.clocking.cd_pix5x.clk
+        # )
+
+        # instantiate fundamental clocks -- Vivado will derive the rest via PLL programmings
+        self.platform.add_platform_command(
+            "create_clock -name clk50 -period 20.0 [get_nets clk50]")
+        self.platform.add_platform_command(
+            "create_clock -name hdmi_in0_clk_p -period 6.734006734006734 [get_nets hdmi_in0_clk_p]")
+        self.platform.add_platform_command(
+            "create_clock -name hdmi_in1_clk_p -period 6.734006734006734 [get_nets hdmi_in1_clk_p]")
+
+        # exclude all generated clocks from the fundamental HDMI cloks and sys clocks
+        self.platform.add_platform_command("set_clock_groups -group [get_clocks -include_generated_clocks -of [get_nets sys_clk]] -group [get_clocks -include_generated_clocks -of [get_nets hdmi_in0_clk_p]] -asynchronous")
+        self.platform.add_platform_command("set_clock_groups -group [get_clocks -include_generated_clocks -of [get_nets sys_clk]] -group [get_clocks -include_generated_clocks -of [get_nets hdmi_in1_clk_p]] -asynchronous")
+
+        # make sure derived clocks get named correctly
+        self.platform.add_platform_command("create_clock_generated_clock -name hdmi_in0_pix_clk [get_pins MMCME2_ADV/CLKOUT0]")
+        self.platform.add_platform_command("create_clock_generated_clock -name hdmi_in0_pix1p25x_clk [get_pins MMCME2_ADV/CLKOUT1]")
+        self.platform.add_platform_command("create_clock_generated_clock -name hdmi_in0_pix5x_clk [get_pins MMCME2_ADV/CLKOUT2]")
+        self.platform.add_platform_command("create_clock_generated_clock -name pix_o_clk [get_pins PLLE2_ADV/CLKOUT0]")
+        self.platform.add_platform_command("create_clock_generated_clock -name pix5x_o_clk [get_pins PLLE2_ADV/CLKOUT2]")
+
+        self.platform.add_platform_command("create_clock_generated_clock -name hdmi_in1_pix_clk [get_pins MMCME2_ADV_1/CLKOUT0]")
+        self.platform.add_platform_command("create_clock_generated_clock -name hdmi_in1_pix1p25x_clk [get_pins MMCME2_ADV_1/CLKOUT1]")
+        self.platform.add_platform_command("create_clock_generated_clock -name hdmi_in1_pix5x_clk [get_pins MMCME2_ADV_1/CLKOUT2]")
+
+        # declare reset as a false path, otherwise the router chokes on this
+        # self.platform.add_platform_command("set_false_path -from [get_nets hdmi_in1_pix_rst] -to [all_registers]")
+        # self.platform.add_platform_command("set_false_path -from [get_nets hdmi_in0_pix_rst] -to [all_registers]")
+        # self.platform.add_platform_command("set_false_path -from [get_nets hdmi_in1_pix1p25x_rst] -to [all_registers]")
+        # self.platform.add_platform_command("set_false_path -from [get_nets hdmi_in0_pix1p25x_rst] -to [all_registers]")
+        # self.platform.add_platform_command("set_false_path -from [get_nets pix_o_rst] -to [all_registers]")
+
+        # alternative using through???
+        self.platform.add_platform_command("set_false_path -through [get_nets hdmi_in1_pix_rst]")
+        self.platform.add_platform_command("set_false_path -through [get_nets hdmi_in0_pix_rst]")
+        self.platform.add_platform_command("set_false_path -through [get_nets hdmi_in1_pix1p25x_rst]")
+        self.platform.add_platform_command("set_false_path -through [get_nets hdmi_in0_pix1p25x_rst]")
+        self.platform.add_platform_command("set_false_path -through [get_nets pix_o_rst]")
+
+        self.platform.add_platform_command("set_false_path -through [get_nets videooverlaysoc_hdmi_out0_clk_gen_ce]")
+
+        # derivatives of reset also need to be declared as false paths. Maybe I should be using the -path option???
+        # self.platform.add_platform_command("set_false_path -from [get_nets videooverlaysoc_hdmi_in1_s7datacapture0_gearbox_rst -to [all_registers]")
+        # self.platform.add_platform_command("set_false_path -from [get_nets videooverlaysoc_hdmi_in1_s7datacapture0_gearbox_rst_write -to [all_registers]")
+        # self.platform.add_platform_command("set_false_path -from [get_nets videooverlaysoc_hdmi_in1_s7datacapture1_gearbox_rst -to [all_registers]")
+        # self.platform.add_platform_command("set_false_path -from [get_nets videooverlaysoc_hdmi_in1_s7datacapture1_gearbox_rst_write -to [all_registers]")
+        # self.platform.add_platform_command("set_false_path -from [get_nets videooverlaysoc_hdmi_in1_s7datacapture2_gearbox_rst -to [all_registers]")
+        # self.platform.add_platform_command("set_false_path -from [get_nets videooverlaysoc_hdmi_in1_s7datacapture2_gearbox_rst_write -to [all_registers]")
+        # self.platform.add_platform_command("set_false_path -from [get_nets videooverlaysoc_hdmi_in0_s7datacapture0_gearbox_rst -to [all_registers]")
+        # self.platform.add_platform_command("set_false_path -from [get_nets videooverlaysoc_hdmi_in0_s7datacapture0_gearbox_rst_write -to [all_registers]")
+        # self.platform.add_platform_command("set_false_path -from [get_nets videooverlaysoc_hdmi_in0_s7datacapture1_gearbox_rst -to [all_registers]")
+        # self.platform.add_platform_command("set_false_path -from [get_nets videooverlaysoc_hdmi_in0_s7datacapture1_gearbox_rst_write -to [all_registers]")
+        # self.platform.add_platform_command("set_false_path -from [get_nets videooverlaysoc_hdmi_in0_s7datacapture2_gearbox_rst -to [all_registers]")
+        # self.platform.add_platform_command("set_false_path -from [get_nets videooverlaysoc_hdmi_in0_s7datacapture2_gearbox_rst_write -to [all_registers]")
+        #
+        # self.platform.add_platform_command("set_false_path -from [get_nets videooverlaysoc_hdmi_out0_clk_gen_ce] -to [all_registers]")
 
         #  hdmi out 1 (overlay ycbcr422)
 
@@ -736,24 +678,30 @@ class VideoOverlaySoC(BaseSoC):
 
         #            platform.request("serial",1), self.clk_freq, baudrate=3000000)
         self.submodules.bridge = UARTWishboneBridge(
-            platform.request("serial",1), self.clk_freq, baudrate=256000)
+            platform.request("serial",1), self.clk_freq, baudrate=115200)
         self.add_wb_master(self.bridge.wishbone)
 
         analyzer_signals = [
             rectangle.hcounter,
             rect_on,
-            c0_pix_o,
-            encoder_blu.out,
+            self.hdmi_in0.data0_decod.valid_o,
+            self.hdmi_in0.data0_decod.output.c,
+            self.hdmi_in0.data1_decod.output.c,
+            self.hdmi_in0.data2_decod.output.c,
+            self.hdmi_in0.chansync.data_out0.c,
+            self.hdmi_in0.syncpol.hsync,
+            self.hdmi_in0.syncpol.vsync,
             hdmi_in0_timing.hsync,
             hdmi_in0_timing.vsync,
             hdmi_in0_timing.de,
-            self.hdmi_core_out0.timing.source.hsync,
-            self.hdmi_core_out0.source.valid,
-            self.hdmi_core_out0.timing.source.valid,
-            self.hdmi_core_out0.timing.source.de,
-            self.hdmi_core_out0.dma.source.valid,
-            self.hdmi_core_out0.source.ready,
-            self.hdmi_core_out0.dma.source.ready,
+
+            #            self.hdmi_core_out0.timing.source.hsync,
+#            self.hdmi_core_out0.source.valid,
+#            self.hdmi_core_out0.timing.source.valid,
+#            self.hdmi_core_out0.timing.source.de,
+#            self.hdmi_core_out0.dma.source.valid,
+#            self.hdmi_core_out0.source.ready,
+#            self.hdmi_core_out0.dma.source.ready,
         ]
         self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 512, cd="pix_o", cd_ratio=2)
 
@@ -789,105 +737,6 @@ class VideoOverlaySoC(BaseSoC):
 
 
 
-
-class VideoRawDMALoopbackSoC(BaseSoC):
-    csr_peripherals = [
-        "hdmi_out0",
-        "hdmi_in0",
-        "hdmi_in0_freq",
-        "hdmi_in0_edid_mem",
-        "dma_writer",
-        "dma_reader"
-    ]
-    csr_map_update(BaseSoC.csr_map, csr_peripherals)
-
-    def __init__(self, platform, *args, **kwargs):
-        BaseSoC.__init__(self, platform, *args, **kwargs)
-
-        # # #
-
-        pix_freq = 148.50e6
-
-        # hdmi in
-        hdmi_in0_pads = platform.request("hdmi_in", 0)
-        self.submodules.hdmi_in0_freq = FrequencyMeter(period=self.clk_freq)
-        self.submodules.hdmi_in0 = HDMIIn(hdmi_in0_pads, device="xc7")
-        self.comb += self.hdmi_in0_freq.clk.eq(self.hdmi_in0.clocking.cd_pix.clk)
-        self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix.clk, period_ns(1*pix_freq))
-        self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix1p25x.clk, period_ns(1.25*pix_freq))
-        self.platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix5x.clk, period_ns(5*pix_freq))
-
-        self.platform.add_false_path_constraints(
-            self.crg.cd_sys.clk,
-            self.hdmi_in0.clocking.cd_pix.clk,
-            self.hdmi_in0.clocking.cd_pix1p25x.clk,
-            self.hdmi_in0.clocking.cd_pix5x.clk)
-
-        # hdmi out
-        hdmi_out0_pads = platform.request("hdmi_out", 0)
-        self.submodules.hdmi_out0_clk_gen = S7HDMIOutEncoderSerializer(hdmi_out0_pads.clk_p, hdmi_out0_pads.clk_n, bypass_encoder=True)
-        self.comb += self.hdmi_out0_clk_gen.data.eq(Signal(10, reset=0b0000011111))
-        self.submodules.hdmi_out0_phy = S7HDMIOutPHY(hdmi_out0_pads, mode="raw")
-
-        # hdmi over
-        self.comb += [
-            platform.request("hdmi_sda_over_up").eq(0),
-            platform.request("hdmi_sda_over_dn").eq(0),
-        ]
-
-        # dram dmas
-        dma_writer = DMAWriter(self.sdram.crossbar.get_port(mode="write", cd="pix"))
-        dma_writer = ClockDomainsRenamer("pix")(dma_writer)
-        dma_reader = DMAReader(self.sdram.crossbar.get_port(mode="read", cd="pix"))
-        dma_reader = ClockDomainsRenamer("pix")(dma_reader)
-        self.submodules += dma_writer, dma_reader
-        self.submodules.dma_writer = DMAControl(dma_writer)
-        self.submodules.dma_reader = DMAControl(dma_reader)
-
-        # hdmi in dma
-        self.comb += [
-            dma_writer.sink.valid.eq(1),
-            #dma_writer.sink.ready # overflows monitored with litescope
-            dma_writer.sink.data[0:10].eq(self.hdmi_in0.syncpol.c0),
-            dma_writer.sink.data[10:20].eq(self.hdmi_in0.syncpol.c1),
-            dma_writer.sink.data[20:30].eq(self.hdmi_in0.syncpol.c2),
-        ]
-
-
-        # hdmi out dma
-        self.comb += [
-            #dma_reader.source.valid # underflow monitored with litescope
-            dma_reader.source.ready.eq(1),
-            self.hdmi_out0_phy.sink.c0.eq(dma_reader.source.data[0:10]),
-            self.hdmi_out0_phy.sink.c1.eq(dma_reader.source.data[10:20]),
-            self.hdmi_out0_phy.sink.c2.eq(dma_reader.source.data[20:30]),
-        ]
-
-        # analyzer
-        from litex.soc.cores.uart import UARTWishboneBridge
-        from litescope import LiteScopeAnalyzer
-
-        self.submodules.bridge = UARTWishboneBridge(
-            platform.request("serial_litescope"), self.clk_freq, baudrate=3000000)
-        self.add_wb_master(self.bridge.wishbone)
-
-        analyzer_signals = [
-            dma_writer.sink.ready,   # monitors dram writer overflows
-            self.hdmi_in0.syncpol.c0,
-            self.hdmi_in0.syncpol.c1,
-            self.hdmi_in0.syncpol.c2,
-
-            dma_reader.source.ready, # monitors dram read underflows
-            self.hdmi_out0_phy.sink.c0,
-            self.hdmi_out0_phy.sink.c1,
-            self.hdmi_out0_phy.sink.c2
-        ]
-#        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 256, cd="pix", cd_ratio=2)
-
-    def do_exit(self, vns):
-        self.analyzer.export_csv(vns, "test/analyzer.csv")
-
-
 def main():
     if os.environ['PYTHONHASHSEED'] != "1":
         print( "PYTHONHASHEED must be set to 1 for consistent validation results. Failing to set this results in non-deterministic compilation results")
@@ -899,14 +748,8 @@ def main():
         exit()
     if sys.argv[1] == "base":
         soc = BaseSoC(platform)
-    elif sys.argv[1] == "pcie":
-        soc = PCIeSoC(platform)
-    elif sys.argv[1] == "video":
-        soc = VideoSoC(platform)
     elif sys.argv[1] == "video_overlay":
         soc = VideoOverlaySoC(platform)
-    elif sys.argv[1] == "video_raw_dma_loopback":
-        soc = VideoRawDMALoopbackSoC(platform)
     builder = Builder(soc, output_dir="build", csr_csv="test/csr.csv")
     vns = builder.build()
     soc.do_exit(vns)
