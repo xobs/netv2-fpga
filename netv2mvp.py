@@ -546,37 +546,20 @@ class VideoOverlaySoC(BaseSoC):
         self.platform.add_platform_command("create_clock_generated_clock -name hdmi_in1_pix1p25x_clk [get_pins MMCME2_ADV_1/CLKOUT1]")
         self.platform.add_platform_command("create_clock_generated_clock -name hdmi_in1_pix5x_clk [get_pins MMCME2_ADV_1/CLKOUT2]")
 
-        # declare reset as a false path, otherwise the router chokes on this
-        # self.platform.add_platform_command("set_false_path -from [get_nets hdmi_in1_pix_rst] -to [all_registers]")
-        # self.platform.add_platform_command("set_false_path -from [get_nets hdmi_in0_pix_rst] -to [all_registers]")
-        # self.platform.add_platform_command("set_false_path -from [get_nets hdmi_in1_pix1p25x_rst] -to [all_registers]")
-        # self.platform.add_platform_command("set_false_path -from [get_nets hdmi_in0_pix1p25x_rst] -to [all_registers]")
-        # self.platform.add_platform_command("set_false_path -from [get_nets pix_o_rst] -to [all_registers]")
-
-        # alternative using through???
+        # don't time the high-fanout reset paths
         self.platform.add_platform_command("set_false_path -through [get_nets hdmi_in1_pix_rst]")
         self.platform.add_platform_command("set_false_path -through [get_nets hdmi_in0_pix_rst]")
         self.platform.add_platform_command("set_false_path -through [get_nets hdmi_in1_pix1p25x_rst]")
         self.platform.add_platform_command("set_false_path -through [get_nets hdmi_in0_pix1p25x_rst]")
         self.platform.add_platform_command("set_false_path -through [get_nets pix_o_rst]")
+        self.platform.add_platform_command("set_false_path -through [get_nets videooverlaysoc_hdmi_out0_clk_gen_ce]") # derived from reset
 
-        self.platform.add_platform_command("set_false_path -through [get_nets videooverlaysoc_hdmi_out0_clk_gen_ce]")
+        # gearbox timing is a multi-cycle path: FAST to SLOW synchronous clock domains
+        self.platform.add_platform_command("set_multicycle_path 2 -setup -start -from [get_clocks videooverlaysoc_hdmi_in0_mmcm_clk1] -to [get_clocks videooverlaysoc_hdmi_in0_mmcm_clk0]")
+        self.platform.add_platform_command("set_multicycle_path 1 -hold -from [get_clocks videooverlaysoc_hdmi_in0_mmcm_clk1] -to [get_clocks videooverlaysoc_hdmi_in0_mmcm_clk0]")
+        self.platform.add_platform_command("set_multicycle_path 2 -setup -start -from [get_clocks videooverlaysoc_hdmi_in1_mmcm_clk1] -to [get_clocks videooverlaysoc_hdmi_in1_mmcm_clk0]")
+        self.platform.add_platform_command("set_multicycle_path 1 -hold -from [get_clocks videooverlaysoc_hdmi_in1_mmcm_clk1] -to [get_clocks videooverlaysoc_hdmi_in1_mmcm_clk0]")
 
-        # derivatives of reset also need to be declared as false paths. Maybe I should be using the -path option???
-        # self.platform.add_platform_command("set_false_path -from [get_nets videooverlaysoc_hdmi_in1_s7datacapture0_gearbox_rst -to [all_registers]")
-        # self.platform.add_platform_command("set_false_path -from [get_nets videooverlaysoc_hdmi_in1_s7datacapture0_gearbox_rst_write -to [all_registers]")
-        # self.platform.add_platform_command("set_false_path -from [get_nets videooverlaysoc_hdmi_in1_s7datacapture1_gearbox_rst -to [all_registers]")
-        # self.platform.add_platform_command("set_false_path -from [get_nets videooverlaysoc_hdmi_in1_s7datacapture1_gearbox_rst_write -to [all_registers]")
-        # self.platform.add_platform_command("set_false_path -from [get_nets videooverlaysoc_hdmi_in1_s7datacapture2_gearbox_rst -to [all_registers]")
-        # self.platform.add_platform_command("set_false_path -from [get_nets videooverlaysoc_hdmi_in1_s7datacapture2_gearbox_rst_write -to [all_registers]")
-        # self.platform.add_platform_command("set_false_path -from [get_nets videooverlaysoc_hdmi_in0_s7datacapture0_gearbox_rst -to [all_registers]")
-        # self.platform.add_platform_command("set_false_path -from [get_nets videooverlaysoc_hdmi_in0_s7datacapture0_gearbox_rst_write -to [all_registers]")
-        # self.platform.add_platform_command("set_false_path -from [get_nets videooverlaysoc_hdmi_in0_s7datacapture1_gearbox_rst -to [all_registers]")
-        # self.platform.add_platform_command("set_false_path -from [get_nets videooverlaysoc_hdmi_in0_s7datacapture1_gearbox_rst_write -to [all_registers]")
-        # self.platform.add_platform_command("set_false_path -from [get_nets videooverlaysoc_hdmi_in0_s7datacapture2_gearbox_rst -to [all_registers]")
-        # self.platform.add_platform_command("set_false_path -from [get_nets videooverlaysoc_hdmi_in0_s7datacapture2_gearbox_rst_write -to [all_registers]")
-        #
-        # self.platform.add_platform_command("set_false_path -from [get_nets videooverlaysoc_hdmi_out0_clk_gen_ce] -to [all_registers]")
 
         #  hdmi out 1 (overlay ycbcr422)
 
@@ -621,14 +604,6 @@ class VideoOverlaySoC(BaseSoC):
         self.submodules.encoder_grn = encoder_grn = ClockDomainsRenamer("pix_o")(Encoder())
         self.submodules.encoder_blu = encoder_blu = ClockDomainsRenamer("pix_o")(Encoder())
 
-        red_c = Signal(2)
-        grn_c = Signal(2)
-        blu_c = Signal(2)
-        self.sync.pix_o += [
-            red_c.eq(self.hdmi_in0.data2_decod.output.c),
-            grn_c.eq(self.hdmi_in0.data1_decod.output.c),
-            blu_c.eq(self.hdmi_in0.data0_decod.output.c)
-        ]
         self.comb += [
             ycbcr2rgb.source.ready.eq(1),
 
@@ -684,16 +659,6 @@ class VideoOverlaySoC(BaseSoC):
         analyzer_signals = [
             rectangle.hcounter,
             rect_on,
-            self.hdmi_in0.data0_decod.valid_o,
-            self.hdmi_in0.data0_decod.output.c,
-            self.hdmi_in0.data1_decod.output.c,
-            self.hdmi_in0.data2_decod.output.c,
-            self.hdmi_in0.chansync.data_out0.c,
-            self.hdmi_in0.syncpol.hsync,
-            self.hdmi_in0.syncpol.vsync,
-            hdmi_in0_timing.hsync,
-            hdmi_in0_timing.vsync,
-            hdmi_in0_timing.de,
 
             #            self.hdmi_core_out0.timing.source.hsync,
 #            self.hdmi_core_out0.source.valid,
@@ -703,7 +668,7 @@ class VideoOverlaySoC(BaseSoC):
 #            self.hdmi_core_out0.source.ready,
 #            self.hdmi_core_out0.dma.source.ready,
         ]
-        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 512, cd="pix_o", cd_ratio=2)
+        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 512, cd="hdmi_in0_pix", cd_ratio=2)
 
     def do_exit(self, vns):
         self.analyzer.export_csv(vns, "test/analyzer.csv")
