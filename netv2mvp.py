@@ -585,7 +585,7 @@ class VideoOverlaySoC(BaseSoC):
         self.hdmi_out0_rgb = hdmi_out0_rgb = stream.Endpoint(rgb_layout) # instantiate the input record
         self.hdmi_out0_rgb_d = hdmi_out0_rgb_d = stream.Endpoint(rgb_layout) # instantiate the output record
         self.comb += [
-            self.hdmi_core_out0.source.ready.eq(1),
+            self.hdmi_core_out0.source.ready.eq(1), # don't forget to tell the upstream component that we're ready, or we get a monochrome screen...
             hdmi_out0_rgb.b.eq(core_source_data_d[0:8]),  # wire up the specific elements of the input record
             hdmi_out0_rgb.g.eq(core_source_data_d[8:16]),
             hdmi_out0_rgb.r.eq(core_source_data_d[16:24]),
