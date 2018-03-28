@@ -446,16 +446,14 @@ class VideoOverlaySoC(BaseSoC):
 
         pix_freq = 148.50e6
 
-        # hdmi in 0 (raw tmds)
+        ############ hdmi in 0 (raw tmds)
         hdmi_in0_pads = platform.request("hdmi_in", 0)
         self.submodules.hdmi_in0_freq = FrequencyMeter(period=self.clk_freq)
         self.submodules.hdmi_in0 = HDMIIn(hdmi_in0_pads, device="xc7", split_mmcm=True)
         self.comb += self.hdmi_in0_freq.clk.eq(self.hdmi_in0.clocking.cd_pix.clk)
-#        platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix.clk, period_ns(1*pix_freq))
-#        platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix_o.clk, period_ns(1*pix_freq))
-#        platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix1p25x.clk, period_ns(1.25*pix_freq))
-#        platform.add_period_constraint(self.hdmi_in0.clocking.cd_pix5x.clk, period_ns(5*pix_freq))
+        # don't add period constraints because we use derived clocks based on a master platform constraint
 
+        # add each interaction with sysclk one at a time to avoid cross-interactions from being declared as false paths
         self.platform.add_false_path_constraints(
             self.crg.cd_sys.clk,
             self.hdmi_in0.clocking.cd_pix.clk
@@ -476,14 +474,6 @@ class VideoOverlaySoC(BaseSoC):
             self.crg.cd_sys.clk,
             self.hdmi_in0.clocking.cd_pix5x_o.clk
         )
-
-        # self.platform.add_false_path_constraints(
-        #     self.crg.cd_sys.clk,
-        #     self.hdmi_in0.clocking.cd_pix.clk,
-        #     self.hdmi_in0.clocking.cd_pix_o.clk,
-        #     self.hdmi_in0.clocking.cd_pix1p25x.clk,
-        #     self.hdmi_in0.clocking.cd_pix5x.clk)
-
 
         hdmi_out0_pads = platform.request("hdmi_out", 0)
         self.submodules.hdmi_out0_clk_gen = S7HDMIOutEncoderSerializer(hdmi_out0_pads.clk_p, hdmi_out0_pads.clk_n, bypass_encoder=True)
@@ -512,18 +502,15 @@ class VideoOverlaySoC(BaseSoC):
             )
         ]
 
-        # hdmi in 1
+        ############## hdmi in 1
         hdmi_in1_pads = platform.request("hdmi_in", 1)
         self.submodules.hdmi_in1_freq = FrequencyMeter(period=self.clk_freq)
         self.submodules.hdmi_in1 = HDMIIn(hdmi_in1_pads,
-                                         self.sdram.crossbar.get_port(mode="write"),
+                                         # self.sdram.crossbar.get_port(mode="write"),
                                          fifo_depth=512,
                                          device="xc7",
                                          split_mmcm=False)
         self.comb += self.hdmi_in1_freq.clk.eq(self.hdmi_in1.clocking.cd_pix.clk)
-#        platform.add_period_constraint(self.hdmi_in1.clocking.cd_pix.clk, period_ns(1*pix_freq))
-#        platform.add_period_constraint(self.hdmi_in1.clocking.cd_pix1p25x.clk, period_ns(1.25*pix_freq))
-#        platform.add_period_constraint(self.hdmi_in1.clocking.cd_pix5x.clk, period_ns(5*pix_freq))
 
         self.platform.add_false_path_constraints(
             self.crg.cd_sys.clk,
@@ -537,13 +524,19 @@ class VideoOverlaySoC(BaseSoC):
             self.crg.cd_sys.clk,
             self.hdmi_in1.clocking.cd_pix5x.clk
         )
-        # self.platform.add_false_path_constraints(
-        #     self.crg.cd_sys.clk,
-        #     self.hdmi_in1.clocking.cd_pix1p25x.clk,
-        #     self.hdmi_in1.clocking.cd_pix5x.clk
-        # )
+        dma_writer = DMAWriter(self.sdram.crossbar.get_port(mode="write", cd="pix"))
+        dma_writer = ClockDomainsRenamer("pix")(dma_writer)
+        self.submodules += dma_writer
+        self.submodules.dma_writer = DMAControl(dma_writer)
+        self.comb += [
+            dma_writer.sink.valid.eq(self.hdmi_in0.syncpol.valid_o & self.hdmi_in0.syncpol.de),
+            dma_writer.sink.data[0:8].eq(self.hdmi_in0.syncpol.r),
+            dma_writer.sink.data[8:16].eq(self.hdmi_in0.syncpol.g),
+            dma_writer.sink.data[16:24].eq(self.hdmi_in0.syncpol.b)
+        ]
 
-        # instantiate fundamental clocks -- Vivado will derive the rest via PLL programmings
+        ############### constraints
+        # instantiate fundamental clocks -- Vivado will derive the rest via PLL programmings because these are specified
         self.platform.add_platform_command(
             "create_clock -name clk50 -period 20.0 [get_nets clk50]")
         self.platform.add_platform_command(
@@ -581,99 +574,46 @@ class VideoOverlaySoC(BaseSoC):
         self.platform.add_platform_command("set_multicycle_path 1 -hold -from [get_clocks videooverlaysoc_hdmi_in1_mmcm_clk1] -to [get_clocks videooverlaysoc_hdmi_in1_mmcm_clk0]")
 
 
-        #  hdmi out 1 (overlay ycbcr422)
+        ###############  hdmi out 1 (overlay ycbcr422)
 
-        out_dram_port = self.sdram.crossbar.get_port(mode="read", cd="pix_o", dw=16, reverse=True)
-        self.submodules.hdmi_core_out0 = VideoOutCore(out_dram_port, mode="ycbcr422", fifo_depth=512, genlock_stream=hdmi_in0_timing)
-
-        ycbcr422to444 = ClockDomainsRenamer("pix_o")(YCbCr422to444())
-        ycbcr2rgb = ClockDomainsRenamer("pix_o")(YCbCr2RGB())
-        timing_delay = TimingDelay(ycbcr422to444.latency + ycbcr2rgb.latency)
-        timing_delay = ClockDomainsRenamer(out_dram_port.cd)(timing_delay)
-        self.submodules += ycbcr422to444, ycbcr2rgb, timing_delay
-
-        # data / control
-        de_r = Signal()
-        core_source_valid_d = Signal()
-        core_source_data_d = Signal(16)
-        sync_cd = getattr(self.sync, out_dram_port.cd)
-        sync_cd += [
-            de_r.eq(self.hdmi_core_out0.source.de),
-            core_source_valid_d.eq(self.hdmi_core_out0.source.valid),
-            core_source_data_d.eq(self.hdmi_core_out0.source.data),
-        ]
-
-        self.comb += [
-            self.hdmi_core_out0.source.ready.eq(1),  # always ready, no flow control
-            ycbcr422to444.reset.eq(self.hdmi_core_out0.source.de & ~de_r),
-            ycbcr422to444.sink.valid.eq(core_source_valid_d),
-            ycbcr422to444.sink.y.eq(core_source_data_d[:8]),
-            ycbcr422to444.sink.cb_cr.eq(core_source_data_d[8:]),
-
-            ycbcr422to444.source.connect(ycbcr2rgb.sink),
-
-        ]
-        # timing
-        self.comb += [
-            timing_delay.sink.de.eq(self.hdmi_core_out0.source.de),
-            timing_delay.sink.vsync.eq(self.hdmi_core_out0.source.vsync),
-            timing_delay.sink.hsync.eq(self.hdmi_core_out0.source.hsync),
-        ]
+        out_dram_port = self.sdram.crossbar.get_port(mode="read", cd="pix_o", dw=32, reverse=True)
+        dma_reader = DMAReader(out_dram_port)
+        dma_reader = ClockDomainsRenamer("pix_o")(dma_reader)
+        self.submodules += dma_reader
 
         self.submodules.encoder_red = encoder_red = ClockDomainsRenamer("pix_o")(Encoder())
         self.submodules.encoder_grn = encoder_grn = ClockDomainsRenamer("pix_o")(Encoder())
         self.submodules.encoder_blu = encoder_blu = ClockDomainsRenamer("pix_o")(Encoder())
 
         self.comb += [
-            ycbcr2rgb.source.ready.eq(1),
+            dma_reader.source.ready.eq(1),
 
-            encoder_red.d.eq(ycbcr2rgb.source.r),
+            encoder_red.d.eq(dma_reader.source.data[0:8]),
             encoder_red.de.eq(1),
             encoder_red.c.eq(0), # we promise to use this only during video areas, so "c" is always 0
 
-            encoder_grn.d.eq(ycbcr2rgb.source.g),
+            encoder_grn.d.eq(dma_reader.source.data[8:16]),
             encoder_grn.de.eq(1),
             encoder_grn.c.eq(0),
 
-            encoder_blu.d.eq(ycbcr2rgb.source.b),
+            encoder_blu.d.eq(dma_reader.source.data[16:24]),
             encoder_blu.de.eq(1),
             encoder_blu.c.eq(0),
         ]
 
-        # Why doesn't this code work??? replace with simple delay below...
         timing_rgb_delay = TimingDelayRGB(3) # create the delay element with specified delay...note if you say TimingDelay() the code runs happily with no error, because Python doesn't typecheck
         timing_rgb_delay = ClockDomainsRenamer("pix_o")(timing_rgb_delay) # assign a clock domain to the delay element
         self.submodules += timing_rgb_delay  # DONT FORGET THIS LINE OR ELSE NOTHING HAPPENS....
         self.hdmi_out0_rgb = hdmi_out0_rgb = stream.Endpoint(rgb_layout) # instantiate the input record
         self.hdmi_out0_rgb_d = hdmi_out0_rgb_d = stream.Endpoint(rgb_layout) # instantiate the output record
         self.comb += [
-            hdmi_out0_rgb.r.eq(ycbcr2rgb.source.r), # wire up the specific elements of the input record
-            hdmi_out0_rgb.b.eq(ycbcr2rgb.source.b),
-            hdmi_out0_rgb.g.eq(ycbcr2rgb.source.g),
+            hdmi_out0_rgb.r.eq(dma_reader.source.data[0:8]), # wire up the specific elements of the input record
+            hdmi_out0_rgb.b.eq(dma_reader.source.data[8:16]),
+            hdmi_out0_rgb.g.eq(dma_reader.source.data[16:24]),
             timing_rgb_delay.sink.eq(hdmi_out0_rgb), # assign input stream to the delay element
             hdmi_out0_rgb_d.eq(timing_rgb_delay.source) # grab output stream from the delay element
             # the output records are directly consumed down below
         ]
-        # r_d = Signal(8)
-        # b_d = Signal(8)
-        # g_d = Signal(8)
-        # r1_d = Signal(8)
-        # b1_d = Signal(8)
-        # g1_d = Signal(8)
-        # r2_d = Signal(8)
-        # b2_d = Signal(8)
-        # g2_d = Signal(8)
-        # self.sync.pix_o += [
-        #     r2_d.eq(ycbcr2rgb.source.r),
-        #     b2_d.eq(ycbcr2rgb.source.g),
-        #     g2_d.eq(ycbcr2rgb.source.b),
-        #     r1_d.eq(r2_d),
-        #     b1_d.eq(b2_d),
-        #     g1_d.eq(g2_d),
-        #     r_d.eq(r1_d),
-        #     b_d.eq(b1_d),
-        #     g_d.eq(g1_d),
-        # ]
 
         # hdmi in to hdmi out
         c0_pix_o = Signal(10)
@@ -715,19 +655,7 @@ class VideoOverlaySoC(BaseSoC):
         analyzer_signals = [
             rectangle.hcounter,
             rect_on,
-            self.hdmi_core_out0.dma.sof,
-            self.hdmi_core_out0.dma.v_r,
-            self.hdmi_core_out0.dma.v,
-#            self.hdmi_core_out0.dma.delay,
-            self.hdmi_core_out0.dma.delay_base.storage,
-            self.hdmi_core_out0.dma.dma.sink.address,
-            #            self.hdmi_core_out0.timing.source.hsync,
-#            self.hdmi_core_out0.source.valid,
-#            self.hdmi_core_out0.timing.source.valid,
-#            self.hdmi_core_out0.timing.source.de,
-#            self.hdmi_core_out0.dma.source.valid,
-#            self.hdmi_core_out0.source.ready,
-#            self.hdmi_core_out0.dma.source.ready,
+            dma_reader.
         ]
         self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 512, cd="pix_o", cd_ratio=2)
 
