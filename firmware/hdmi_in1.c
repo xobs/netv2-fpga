@@ -75,7 +75,7 @@ void hdmi_in1_isr(void)
 	}
 #endif
 
-	expected_length = hdmi_in1_hres*hdmi_in1_vres*2;
+	expected_length = hdmi_in1_hres*hdmi_in1_vres*4;
 	if(hdmi_in1_dma_slot0_status_read() == DVISAMPLER_SLOT_PENDING) {
 		length = hdmi_in1_dma_slot0_address_read() - (hdmi_in1_framebuffer_base(hdmi_in1_fb_slot_indexes[0]) & 0x0fffffff);
 		if(length == expected_length) {
@@ -126,7 +126,7 @@ void hdmi_in1_init_video(int hres, int vres)
 
 	printf( "setting up HDMI1 interrupts, hres: %d vres: %d\n", hdmi_in1_hres, hdmi_in1_vres );
 	
-	hdmi_in1_dma_frame_size_write(hres*vres*2);
+	hdmi_in1_dma_frame_size_write(hres*vres*4);
 	hdmi_in1_fb_slot_indexes[0] = 0;
 	hdmi_in1_dma_slot0_address_write(hdmi_in1_framebuffer_base(0));
 	printf( "slot0 %x\n", hdmi_in1_framebuffer_base(0) );

@@ -809,7 +809,7 @@ void ci_service(void)
 		  hdmi_core_out0_initiator_vsync_end_write(m->v_active + m->v_sync_offset + m->v_sync_width);
 		  hdmi_core_out0_initiator_vscan_write(m->v_active + m->v_blanking);
 		  
-		  hdmi_core_out0_initiator_length_write(m->h_active*m->v_active*2);
+		  hdmi_core_out0_initiator_length_write(m->h_active*m->v_active*4);
 
 		  rectangle_hrect_start_write(0);
 		  rectangle_hrect_end_write(1200);
