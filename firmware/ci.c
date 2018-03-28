@@ -567,11 +567,15 @@ void ci_service(void)
 {
 	char *str;
 	char *token;
-
+	char dummy[] = "dummy";
+	int was_dummy = 0;
+	
 	status_service();
 
 	str = readstr();
-	if(str == NULL) return;
+	if(str == NULL) {
+	  str = (char *) dummy;
+	}
 
 	token = get_token(&str);
 
@@ -816,7 +820,9 @@ void ci_service(void)
 		  wprintf("out vres %d, vscan %d\r\n", hdmi_core_out0_initiator_vres_read(), hdmi_core_out0_initiator_vscan_read());
 		  wprintf("out length %d\r\n", hdmi_core_out0_initiator_length_read());
 
-		  hdmi_core_out0_dma_delay_base_write(64);  // this helps align the DMA transfer
+		  hdmi_core_out0_dma_delay_base_write(80);  // this helps align the DMA transfer through various delay offsets
+		  // empricially determined, will shift around depending on what you do in the overlay video pipe, e.g.
+		  // ycrcb422 vs rgb
 		  
 		  hdmi_core_out0_initiator_enable_write(1);
 		} else if(strcmp(token, "setrect") == 0 ) {
@@ -835,9 +841,13 @@ void ci_service(void)
 		  wprintf("delay value: %d\r\n", hdmi_core_out0_dma_delay_base_read());
 		} else
 			help_debug();
+	} else if (strncmp(token, "dummy", 5) == 0) {
+	  was_dummy = 1;
 	} else {
 	  //		if(status_enabled)
 	  //			status_disable();
 	}
-	ci_prompt();
+    if( !was_dummy ) {
+      ci_prompt();
+    }
 }
