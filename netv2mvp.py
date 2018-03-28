@@ -399,6 +399,26 @@ class RectOpening(Module, AutoCSR):
         self.comb += self.rect_on.eq(((hcounter > self.hrect_start.storage) & (hcounter < self.hrect_end.storage) &
                                       (vcounter > self.vrect_start.storage) & (vcounter < self.vrect_end.storage))  == 1)
 
+rgb_layout = [
+    ("r", 8),
+    ("g", 8),
+    ("b", 8)
+]
+
+class TimingDelayRGB(Module):
+    def __init__(self, latency):
+        self.sink = stream.Endpoint(rgb_layout)
+        self.source = stream.Endpoint(rgb_layout)
+
+        # # #
+
+        for name in list_signals(rgb_layout):
+            s = getattr(self.sink, name)
+            for i in range(latency):
+                next_s = Signal(len(s))  # without len(s), this makes only one-bit wide delay lines
+                self.sync += next_s.eq(s)
+                s = next_s
+            self.comb += getattr(self.source, name).eq(s)
 
 class VideoOverlaySoC(BaseSoC):
     csr_peripherals = [
@@ -620,6 +640,41 @@ class VideoOverlaySoC(BaseSoC):
             encoder_blu.c.eq(0),
         ]
 
+        # Why doesn't this code work??? replace with simple delay below...
+        timing_rgb_delay = TimingDelayRGB(3) # create the delay element with specified delay...note if you say TimingDelay() the code runs happily with no error, because Python doesn't typecheck
+        timing_rgb_delay = ClockDomainsRenamer("pix_o")(timing_rgb_delay) # assign a clock domain to the delay element
+        self.submodules += timing_rgb_delay  # DONT FORGET THIS LINE OR ELSE NOTHING HAPPENS....
+        self.hdmi_out0_rgb = hdmi_out0_rgb = stream.Endpoint(rgb_layout) # instantiate the input record
+        self.hdmi_out0_rgb_d = hdmi_out0_rgb_d = stream.Endpoint(rgb_layout) # instantiate the output record
+        self.comb += [
+            hdmi_out0_rgb.r.eq(ycbcr2rgb.source.r), # wire up the specific elements of the input record
+            hdmi_out0_rgb.b.eq(ycbcr2rgb.source.b),
+            hdmi_out0_rgb.g.eq(ycbcr2rgb.source.g),
+            timing_rgb_delay.sink.eq(hdmi_out0_rgb), # assign input stream to the delay element
+            hdmi_out0_rgb_d.eq(timing_rgb_delay.source) # grab output stream from the delay element
+            # the output records are directly consumed down below
+        ]
+        # r_d = Signal(8)
+        # b_d = Signal(8)
+        # g_d = Signal(8)
+        # r1_d = Signal(8)
+        # b1_d = Signal(8)
+        # g1_d = Signal(8)
+        # r2_d = Signal(8)
+        # b2_d = Signal(8)
+        # g2_d = Signal(8)
+        # self.sync.pix_o += [
+        #     r2_d.eq(ycbcr2rgb.source.r),
+        #     b2_d.eq(ycbcr2rgb.source.g),
+        #     g2_d.eq(ycbcr2rgb.source.b),
+        #     r1_d.eq(r2_d),
+        #     b1_d.eq(b2_d),
+        #     g1_d.eq(g2_d),
+        #     r_d.eq(r1_d),
+        #     b_d.eq(b1_d),
+        #     g_d.eq(g1_d),
+        # ]
+
         # hdmi in to hdmi out
         c0_pix_o = Signal(10)
         c1_pix_o = Signal(10)
@@ -636,8 +691,9 @@ class VideoOverlaySoC(BaseSoC):
         self.comb += rect_on.eq(rectangle.rect_on)
 
         self.sync.pix_o += [
-            If(rect_on,
-                    self.hdmi_out0_phy.sink.c0.eq(encoder_blu.out),
+            If(rect_on & (hdmi_out0_rgb_d.r >= 128) & (hdmi_out0_rgb_d.g >= 128) & (hdmi_out0_rgb_d.b >= 128),
+#            If(rect_on & (r_d >= 128) & (g_d >= 128) & (b_d >= 128),
+                  self.hdmi_out0_phy.sink.c0.eq(encoder_blu.out),
                     self.hdmi_out0_phy.sink.c1.eq(encoder_grn.out),
                     self.hdmi_out0_phy.sink.c2.eq(encoder_red.out),
             ).Else(
@@ -659,7 +715,12 @@ class VideoOverlaySoC(BaseSoC):
         analyzer_signals = [
             rectangle.hcounter,
             rect_on,
-
+            self.hdmi_core_out0.dma.sof,
+            self.hdmi_core_out0.dma.v_r,
+            self.hdmi_core_out0.dma.v,
+#            self.hdmi_core_out0.dma.delay,
+            self.hdmi_core_out0.dma.delay_base.storage,
+            self.hdmi_core_out0.dma.dma.sink.address,
             #            self.hdmi_core_out0.timing.source.hsync,
 #            self.hdmi_core_out0.source.valid,
 #            self.hdmi_core_out0.timing.source.valid,
@@ -668,7 +729,7 @@ class VideoOverlaySoC(BaseSoC):
 #            self.hdmi_core_out0.source.ready,
 #            self.hdmi_core_out0.dma.source.ready,
         ]
-        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 512, cd="hdmi_in0_pix", cd_ratio=2)
+        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 512, cd="pix_o", cd_ratio=2)
 
     def do_exit(self, vns):
         self.analyzer.export_csv(vns, "test/analyzer.csv")

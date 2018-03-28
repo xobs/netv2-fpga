@@ -807,17 +807,19 @@ void ci_service(void)
 		  
 		  hdmi_core_out0_initiator_length_write(m->h_active*m->v_active*2);
 
-		  rectangle_hrect_start_write(200);
+		  rectangle_hrect_start_write(0);
 		  rectangle_hrect_end_write(1200);
-		  rectangle_vrect_start_write(200);
-		  rectangle_vrect_end_write(800);
+		  rectangle_vrect_start_write(0);
+		  rectangle_vrect_end_write(540);
 
 		  wprintf("out hres %d, hscan %d\r\n", hdmi_core_out0_initiator_hres_read(), hdmi_core_out0_initiator_hscan_read());
 		  wprintf("out vres %d, vscan %d\r\n", hdmi_core_out0_initiator_vres_read(), hdmi_core_out0_initiator_vscan_read());
 		  wprintf("out length %d\r\n", hdmi_core_out0_initiator_length_read());
 
+		  hdmi_core_out0_dma_delay_base_write(64);  // this helps align the DMA transfer
+		  
 		  hdmi_core_out0_initiator_enable_write(1);
-		} else if(strcmp(token, "rset") == 0 ) {
+		} else if(strcmp(token, "setrect") == 0 ) {
 		  const struct video_timing *m = &video_modes[12];
 		  m = &video_modes[12];
 		  
@@ -828,6 +830,9 @@ void ci_service(void)
 		  rectangle_vrect_end_write((unsigned short) strtoul(get_token(&str), NULL, 0) + m->v_blanking );
 		} else if(strcmp(token, "rectoff") == 0 ) {
 		  hdmi_core_out0_initiator_enable_write(0);
+		} else if (strcmp(token, "delay") == 0) {
+		  hdmi_core_out0_dma_delay_base_write((unsigned int) strtoul(get_token(&str), NULL, 0));
+		  wprintf("delay value: %d\r\n", hdmi_core_out0_dma_delay_base_read());
 		} else
 			help_debug();
 	} else {
