@@ -507,7 +507,7 @@ class VideoOverlaySoC(BaseSoC):
         self.submodules.hdmi_in1_freq = FrequencyMeter(period=self.clk_freq)
         self.submodules.hdmi_in1 = HDMIIn(hdmi_in1_pads,
                                          self.sdram.crossbar.get_port(mode="write"),
-                                         fifo_depth=512,
+                                         fifo_depth=1024,
                                          device="xc7",
                                          split_mmcm=False,
                                          mode="rgb"
@@ -569,7 +569,7 @@ class VideoOverlaySoC(BaseSoC):
         ###############  hdmi out 1 (overlay rgb)
 
         out_dram_port = self.sdram.crossbar.get_port(mode="read", cd="pix_o", dw=32, reverse=True)
-        self.submodules.hdmi_core_out0 = VideoOutCore(out_dram_port, mode="rgb", fifo_depth=512, genlock_stream=hdmi_in0_timing)
+        self.submodules.hdmi_core_out0 = VideoOutCore(out_dram_port, mode="rgb", fifo_depth=1024, genlock_stream=hdmi_in0_timing)
 
         core_source_valid_d = Signal()
         core_source_data_d = Signal(32)
@@ -641,27 +641,27 @@ class VideoOverlaySoC(BaseSoC):
                     self.hdmi_out0_phy.sink.c2.eq(c2_pix_o),
             )
         ]
-
-        # analyzer
-        from litex.soc.cores.uart import UARTWishboneBridge
-        from litescope import LiteScopeAnalyzer
-
-        #            platform.request("serial",1), self.clk_freq, baudrate=3000000)
-        self.submodules.bridge = UARTWishboneBridge(
-            platform.request("serial",1), self.clk_freq, baudrate=115200)
-        self.add_wb_master(self.bridge.wishbone)
-
-        analyzer_signals = [
-            self.hdmi_in1.frame.cur_word_valid,
-#            self.hdmi_in1.frame.cur_word,
-            self.hdmi_in1.frame.pack_counter,
-            self.hdmi_in1.frame.new_frame,
-            self.hdmi_in1.frame.fifo.sink.ready,
-        ]
-        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 128, cd="hdmi_in1_pix", cd_ratio=2)
-
-    def do_exit(self, vns):
-        self.analyzer.export_csv(vns, "test/analyzer.csv")
+#
+#         # analyzer
+#         from litex.soc.cores.uart import UARTWishboneBridge
+#         from litescope import LiteScopeAnalyzer
+#
+#         #            platform.request("serial",1), self.clk_freq, baudrate=3000000)
+#         self.submodules.bridge = UARTWishboneBridge(
+#             platform.request("serial",1), self.clk_freq, baudrate=115200)
+#         self.add_wb_master(self.bridge.wishbone)
+#
+#         analyzer_signals = [
+#             self.hdmi_in1.frame.cur_word_valid,
+# #            self.hdmi_in1.frame.cur_word,
+#             self.hdmi_in1.frame.pack_counter,
+#             self.hdmi_in1.frame.new_frame,
+#             self.hdmi_in1.frame.fifo.sink.ready,
+#         ]
+#         self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 128, cd="hdmi_in1_pix", cd_ratio=2)
+#
+#     def do_exit(self, vns):
+#         self.analyzer.export_csv(vns, "test/analyzer.csv")
 """
         # litescope
         litescope_serial = platform.request("serial", 1)
