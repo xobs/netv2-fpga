@@ -431,7 +431,7 @@ class VideoOverlaySoC(BaseSoC):
         ########## hdmi in 0 (raw tmds)
         hdmi_in0_pads = platform.request("hdmi_in", 0)
         self.submodules.hdmi_in0_freq = FrequencyMeter(period=self.clk_freq)
-        self.submodules.hdmi_in0 = HDMIIn(hdmi_in0_pads, device="xc7", split_mmcm=True, hdmi=True)
+        self.submodules.hdmi_in0 = HDMIIn(hdmi_in0_pads, device="xc7", split_mmcm=True, hdmi=False)
         self.comb += self.hdmi_in0_freq.clk.eq(self.hdmi_in0.clocking.cd_pix.clk)
         # don't add clock timings here, we add a root clock constraint that derives the rest automatically
 
@@ -634,25 +634,16 @@ class VideoOverlaySoC(BaseSoC):
         self.add_wb_master(self.bridge.wishbone)
 
         analyzer_signals = [
-            self.hdmi_in0.decode_terc4.valid_i,
-            self.hdmi_in0.decode_terc4.de_o,
-            self.hdmi_in0.decode_terc4.encoding_terc4,
-            self.hdmi_in0.decode_terc4.encrypting_video,
-            self.hdmi_in0.decode_terc4.encrypting_data,
-            self.hdmi_in0.decode_terc4.ctl_code,
-            self.hdmi_in0.decode_terc4.data0_dect4.decval.vgb,
-            self.hdmi_in0.decode_terc4.data1_dect4.decval.vgb,
-            self.hdmi_in0.decode_terc4.data2_dect4.decval.vgb,
-            self.hdmi_in0.decode_terc4.data0_dect4.decval.c_valid,
-            self.hdmi_in0.decode_terc4.data1_dect4.decval.c_valid,
-            self.hdmi_in0.decode_terc4.data2_dect4.decval.c_valid,
-            self.hdmi_in0.decode_terc4.data2_dect4.decval.dgb,
-            self.hdmi_in0.decode_terc4.data1_dect4.decval.dgb,
+            hdmi_in0_timing,
             self.hdmi_in0.syncpol.hsync,
             self.hdmi_in0.syncpol.vsync,
             self.hdmi_in0.syncpol.de,
+            self.hdmi_in0.chansync.data_in0.de,
+#            self.hdmi_in0.decode_terc4.de_o,
+            self.hdmi_in0.chansync.data_out0,
+            self.hdmi_in0.data0_decod.output,
         ]
-        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 128, cd="hdmi_in0_pix", cd_ratio=2)
+        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 256, cd="hdmi_in0_pix", cd_ratio=2)
 
     def do_exit(self, vns):
         self.analyzer.export_csv(vns, "test/analyzer.csv")
