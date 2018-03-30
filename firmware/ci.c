@@ -839,6 +839,10 @@ void ci_service(void)
 		} else if (strcmp(token, "delay") == 0) {
 		  hdmi_core_out0_dma_delay_base_write((unsigned int) strtoul(get_token(&str), NULL, 0));
 		  wprintf("delay value: %d\r\n", hdmi_core_out0_dma_delay_base_read());
+		} else if (strcmp(token, "dvimode") == 0 ) {
+		  hdmi_in0_decode_terc4_dvimode_write(1);
+		} else if (strcmp(token, "hdmimode") == 0 ) {
+		  hdmi_in0_decode_terc4_dvimode_write(0);
 		} else
 			help_debug();
 	} else if (strncmp(token, "dummy", 5) == 0) {
