@@ -7,16 +7,12 @@ import os
 
 from migen import *
 from migen.genlib.resetsync import AsyncResetSynchronizer
-# from litex.gen import *
-#from litex.gen.genlib.resetsync import AsyncResetSynchronizer
 
 from litex.build.generic_platform import *
 from litex.build.xilinx import XilinxPlatform
 
-from litex.soc.integration.soc_core import mem_decoder
 from litex.soc.integration.soc_sdram import *
 from litex.soc.integration.builder import *
-from litex.soc.integration.cpu_interface import get_csr_header
 from litex.soc.cores import dna, xadc
 from litex.soc.cores.frequency_meter import FrequencyMeter
 
@@ -24,25 +20,11 @@ from litedram.modules import MT41J128M16
 from litedram.phy import a7ddrphy
 from litedram.core import ControllerSettings
 
-from litepcie.phy.s7pciephy import S7PCIEPHY
-from litepcie.core import LitePCIeEndpoint, LitePCIeMSI
-from litepcie.frontend.dma import LitePCIeDMA
-from litepcie.frontend.wishbone import LitePCIeWishboneBridge
-
 from litevideo.input import HDMIIn
-from litevideo.output import VideoOut
 from litevideo.output.hdmi.s7 import S7HDMIOutEncoderSerializer, S7HDMIOutPHY
 
-from gateware.dma import DMAWriter, DMAReader, DMAControl
-
-from litedram.frontend.bist import LiteDRAMBISTGenerator
-from litedram.frontend.bist import LiteDRAMBISTChecker
-
 from litevideo.output.common import *
-from litevideo.output import TimingDelay
 from litevideo.output.core import VideoOutCore
-from litevideo.csc.ycbcr2rgb import YCbCr2RGB
-from litevideo.csc.ycbcr422to444 import YCbCr422to444
 from litevideo.output.hdmi.encoder import Encoder
 
 from litex.soc.interconnect.csr import *
@@ -449,7 +431,7 @@ class VideoOverlaySoC(BaseSoC):
         ########## hdmi in 0 (raw tmds)
         hdmi_in0_pads = platform.request("hdmi_in", 0)
         self.submodules.hdmi_in0_freq = FrequencyMeter(period=self.clk_freq)
-        self.submodules.hdmi_in0 = HDMIIn(hdmi_in0_pads, device="xc7", split_mmcm=True)
+        self.submodules.hdmi_in0 = HDMIIn(hdmi_in0_pads, device="xc7", split_mmcm=True, hdmi=True)
         self.comb += self.hdmi_in0_freq.clk.eq(self.hdmi_in0.clocking.cd_pix.clk)
         # don't add clock timings here, we add a root clock constraint that derives the rest automatically
 
@@ -641,27 +623,39 @@ class VideoOverlaySoC(BaseSoC):
                     self.hdmi_out0_phy.sink.c2.eq(c2_pix_o),
             )
         ]
-#
-#         # analyzer
-#         from litex.soc.cores.uart import UARTWishboneBridge
-#         from litescope import LiteScopeAnalyzer
-#
-#         #            platform.request("serial",1), self.clk_freq, baudrate=3000000)
-#         self.submodules.bridge = UARTWishboneBridge(
-#             platform.request("serial",1), self.clk_freq, baudrate=115200)
-#         self.add_wb_master(self.bridge.wishbone)
-#
-#         analyzer_signals = [
-#             self.hdmi_in1.frame.cur_word_valid,
-# #            self.hdmi_in1.frame.cur_word,
-#             self.hdmi_in1.frame.pack_counter,
-#             self.hdmi_in1.frame.new_frame,
-#             self.hdmi_in1.frame.fifo.sink.ready,
-#         ]
-#         self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 128, cd="hdmi_in1_pix", cd_ratio=2)
-#
-#     def do_exit(self, vns):
-#         self.analyzer.export_csv(vns, "test/analyzer.csv")
+
+        # analyzer
+        from litex.soc.cores.uart import UARTWishboneBridge
+        from litescope import LiteScopeAnalyzer
+
+        #            platform.request("serial",1), self.clk_freq, baudrate=3000000)
+        self.submodules.bridge = UARTWishboneBridge(
+            platform.request("serial",1), self.clk_freq, baudrate=115200)
+        self.add_wb_master(self.bridge.wishbone)
+
+        analyzer_signals = [
+            self.hdmi_in0.decode_terc4.valid_i,
+            self.hdmi_in0.decode_terc4.de_o,
+            self.hdmi_in0.decode_terc4.encoding_terc4,
+            self.hdmi_in0.decode_terc4.encrypting_video,
+            self.hdmi_in0.decode_terc4.encrypting_data,
+            self.hdmi_in0.decode_terc4.ctl_code,
+            self.hdmi_in0.decode_terc4.data0_dect4.decval.vgb,
+            self.hdmi_in0.decode_terc4.data1_dect4.decval.vgb,
+            self.hdmi_in0.decode_terc4.data2_dect4.decval.vgb,
+            self.hdmi_in0.decode_terc4.data0_dect4.decval.c_valid,
+            self.hdmi_in0.decode_terc4.data1_dect4.decval.c_valid,
+            self.hdmi_in0.decode_terc4.data2_dect4.decval.c_valid,
+            self.hdmi_in0.decode_terc4.data2_dect4.decval.dgb,
+            self.hdmi_in0.decode_terc4.data1_dect4.decval.dgb,
+            self.hdmi_in0.syncpol.hsync,
+            self.hdmi_in0.syncpol.vsync,
+            self.hdmi_in0.syncpol.de,
+        ]
+        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 128, cd="hdmi_in0_pix", cd_ratio=2)
+
+    def do_exit(self, vns):
+        self.analyzer.export_csv(vns, "test/analyzer.csv")
 """
         # litescope
         litescope_serial = platform.request("serial", 1)
