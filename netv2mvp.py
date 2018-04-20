@@ -29,6 +29,9 @@ from litevideo.output.hdmi.encoder import Encoder
 
 from litex.soc.interconnect.csr import *
 
+from liteeth.common import *
+
+
 _io = [
     ("clk50", 0, Pins("J19"), IOStandard("LVCMOS33")),
 
@@ -250,6 +253,7 @@ class CRG(Module):
         self.clock_domains.cd_sys4x_dqs = ClockDomain(reset_less=True)
         self.clock_domains.cd_clk200 = ClockDomain()
         self.clock_domains.cd_clk100 = ClockDomain()
+        self.clock_domains.cd_eth = ClockDomain()
 
         clk50 = platform.request("clk50")
         rst = Signal()
@@ -260,6 +264,7 @@ class CRG(Module):
         pll_sys4x = Signal()
         pll_sys4x_dqs = Signal()
         pll_clk200 = Signal()
+        pll_clk50 = Signal()
         self.specials += [
             Instance("PLLE2_BASE",
                      p_STARTUP_WAIT="FALSE", o_LOCKED=pll_locked,
@@ -283,13 +288,19 @@ class CRG(Module):
 
                      # 200 MHz
                      p_CLKOUT3_DIVIDE=8, p_CLKOUT3_PHASE=0.0,
-                     o_CLKOUT3=pll_clk200
+                     o_CLKOUT3=pll_clk200,
+
+                     # 50 MHz
+                     p_CLKOUT4_DIVIDE=1, p_CLKOUT4_PHASE=0.0,
+                     o_CLKOUT4=pll_clk50,
+
             ),
             Instance("BUFG", i_I=self.pll_sys, o_O=self.cd_sys.clk),
             Instance("BUFG", i_I=self.pll_sys, o_O=self.cd_clk100.clk),
             Instance("BUFG", i_I=pll_clk200, o_O=self.cd_clk200.clk),
             Instance("BUFG", i_I=pll_sys4x, o_O=self.cd_sys4x.clk),
             Instance("BUFG", i_I=pll_sys4x_dqs, o_O=self.cd_sys4x_dqs.clk),
+            Instance("BUFG", i_I=pll_clk50, o_O=self.cd_eth.clk),
             AsyncResetSynchronizer(self.cd_sys, ~pll_locked | rst),
             AsyncResetSynchronizer(self.cd_clk200, ~pll_locked | rst),
             AsyncResetSynchronizer(self.cd_clk100, ~pll_locked | rst)
@@ -433,7 +444,9 @@ class VideoOverlaySoC(BaseSoC):
         "hdmi_in1_freq",
         "hdmi_in1_edid_mem",  
         "rectangle",
-        "analyzer"
+        "analyzer",
+        "phy",
+        "core"
     ]
     csr_map_update(BaseSoC.csr_map, csr_peripherals)
 
@@ -654,14 +667,31 @@ class VideoOverlaySoC(BaseSoC):
         self.comb += platform.request("fpga_led4", 0).eq(0)  # OV0 red
         self.comb += platform.request("fpga_led5", 0).eq(self.hdmi_in1.clocking.locked)  # OV0 green
 
+        # analyzer ethernet
+        from liteeth.phy.rmii import LiteEthPHYRMII
+        from liteeth.core import LiteEthUDPIPCore
+        from liteeth.frontend.etherbone import LiteEthEtherbone
+
+        self.submodules.phy = phy = LiteEthPHYRMII(platform.request("rmii_eth_clocks"), platform.request("rmii_eth"))
+        mac_address = 0x1337320dbabe
+        ip_address="10.0.245.16"
+        self.submodules.core = LiteEthUDPIPCore(self.phy, mac_address, convert_ip(ip_address), int(100e6))
+        self.submodules.etherbone = LiteEthEtherbone(self.core.udp, 1234, mode="master")
+        self.add_wb_master(self.etherbone.wishbone.bus)
+
+        self.platform.add_false_path_constraints(
+           self.crg.cd_sys.clk,
+           self.crg.cd_eth.clk
+        )
+
         # analyzer
-        from litex.soc.cores.uart import UARTWishboneBridge
+#        from litex.soc.cores.uart import UARTWishboneBridge
         from litescope import LiteScopeAnalyzer
 
         #            platform.request("serial",1), self.clk_freq, baudrate=3000000)
-        self.submodules.bridge = UARTWishboneBridge(
-            platform.request("serial",1), self.clk_freq, baudrate=115200)
-        self.add_wb_master(self.bridge.wishbone)
+#        self.submodules.bridge = UARTWishboneBridge(
+#            platform.request("serial",1), self.clk_freq, baudrate=115200)
+#        self.add_wb_master(self.bridge.wishbone)
 
         analyzer_signals = [
             hdmi_in0_timing,
