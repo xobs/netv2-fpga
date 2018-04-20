@@ -32,9 +32,12 @@ from litex.soc.interconnect.csr import *
 _io = [
     ("clk50", 0, Pins("J19"), IOStandard("LVCMOS33")),
 
-    ("user_led", 0, Pins("M21"), IOStandard("LVCMOS33")),
-    ("user_led", 1, Pins("N20"), IOStandard("LVCMOS33")),
-    ("user_led", 2, Pins("L21"), IOStandard("LVCMOS33")),
+    ("fpga_led0", 0, Pins("M21"), IOStandard("LVCMOS33")),
+    ("fpga_led1", 0, Pins("N20"), IOStandard("LVCMOS33")),
+    ("fpga_led2", 0, Pins("L21"), IOStandard("LVCMOS33")),
+    ("fpga_led3", 0, Pins("AA21"), IOStandard("LVCMOS33")),
+    ("fpga_led4", 0, Pins("R19"), IOStandard("LVCMOS33")),
+    ("fpga_led5", 0, Pins("M16"), IOStandard("LVCMOS33")),
 
     ("serial", 0,
         Subsignal("tx", Pins("E14")),
@@ -43,8 +46,8 @@ _io = [
     ),
 
     ("serial", 1,
-        Subsignal("tx", Pins("B18")), # hax 8
-        Subsignal("rx", Pins("A18")), # hax 14
+        Subsignal("tx", Pins("B17")), # hax 7
+        Subsignal("rx", Pins("A18")), # hax 8
         IOStandard("LVCMOS33")
     ),
 
@@ -174,6 +177,21 @@ _io = [
     ("hdmi_ov0_cec", 0, Pins("P19"), IOStandard("LVCMOS33")),  # dedicated to the overlay input
     ("hdmi_ov0_hpd_n", 0, Pins("V17"), IOStandard("LVCMOS33")), # if the overlay input is plugged in
 
+    # RMII PHY Pads
+    ("rmii_eth_clocks", 0,
+     Subsignal("ref_clk", Pins("D17"), IOStandard("LVCMOS33"))
+     ),
+    ("rmii_eth", 0,
+     Subsignal("rst_n", Pins("F16"), IOStandard("LVCMOS33")),
+     Subsignal("rx_data", Pins("A20 B18"), IOStandard("LVCMOS33")),
+     Subsignal("crs_dv", Pins("C20"), IOStandard("LVCMOS33")),
+     Subsignal("tx_en", Pins("A19"), IOStandard("LVCMOS33")),
+     Subsignal("tx_data", Pins("C18 C19"), IOStandard("LVCMOS33")),
+     Subsignal("mdc", Pins("F14"), IOStandard("LVCMOS33")),
+     Subsignal("mdio", Pins("F13"), IOStandard("LVCMOS33")),
+     Subsignal("rx_er", Pins("B20"), IOStandard("LVCMOS33")),
+     Subsignal("int_n", Pins("D21"), IOStandard("LVCMOS33")),
+     ),
 ]
 
 
@@ -328,7 +346,9 @@ class BaseSoC(SoCSDRAM):
         # common led
         self.sys_led = Signal()
         self.pcie_led = Signal()
-        self.comb += platform.request("user_led", 0).eq(self.sys_led ^ self.pcie_led)
+        self.comb += platform.request("fpga_led0", 0).eq(self.sys_led ^ self.pcie_led) #TX0 green
+        self.comb += platform.request("fpga_led1", 0).eq(0) #TX0 red
+
 
         # sys led
         sys_counter = Signal(32)
@@ -343,6 +363,7 @@ class RectOpening(Module, AutoCSR):
         self.hrect_end = CSRStorage(12)
         self.vrect_start = CSRStorage(12)
         self.vrect_end = CSRStorage(12)
+        self.rect_thresh = CSRStorage(8)
 
         self.rect_on = Signal()
 
@@ -492,7 +513,8 @@ class VideoOverlaySoC(BaseSoC):
                                          fifo_depth=1024,
                                          device="xc7",
                                          split_mmcm=False,
-                                         mode="rgb"
+                                         mode="rgb",
+                                         hdmi=True
                                           )
         self.comb += self.hdmi_in1_freq.clk.eq(self.hdmi_in1.clocking.cd_pix.clk)
 
@@ -607,12 +629,15 @@ class VideoOverlaySoC(BaseSoC):
         ]
 
         rect_on = Signal()
+        rect_thresh = Signal(8)
 
         self.submodules.rectangle = rectangle = ClockDomainsRenamer("pix_o")( RectOpening(hdmi_in0_timing) )
         self.comb += rect_on.eq(rectangle.rect_on)
+        self.comb += rect_thresh.eq(rectangle.rect_thresh.storage)
 
         self.sync.pix_o += [
-            If(rect_on & (hdmi_out0_rgb_d.r >= 128) & (hdmi_out0_rgb_d.g >= 128) & (hdmi_out0_rgb_d.b >= 128),
+#            If(rect_on & (hdmi_out0_rgb_d.r >= 128) & (hdmi_out0_rgb_d.g >= 128) & (hdmi_out0_rgb_d.b >= 128),
+            If(rect_on & (hdmi_out0_rgb_d.r >= rect_thresh) & (hdmi_out0_rgb_d.g >= rect_thresh) & (hdmi_out0_rgb_d.b >= rect_thresh),
 #            If(rect_on,
                     self.hdmi_out0_phy.sink.c0.eq(encoder_blu.out),
                     self.hdmi_out0_phy.sink.c1.eq(encoder_grn.out),
@@ -623,6 +648,11 @@ class VideoOverlaySoC(BaseSoC):
                     self.hdmi_out0_phy.sink.c2.eq(c2_pix_o),
             )
         ]
+
+        self.comb += platform.request("fpga_led2", 0).eq(self.hdmi_in0.clocking.locked)  # RX0 green
+        self.comb += platform.request("fpga_led3", 0).eq(0)  # RX0 red
+        self.comb += platform.request("fpga_led4", 0).eq(0)  # OV0 red
+        self.comb += platform.request("fpga_led5", 0).eq(self.hdmi_in1.clocking.locked)  # OV0 green
 
         # analyzer
         from litex.soc.cores.uart import UARTWishboneBridge

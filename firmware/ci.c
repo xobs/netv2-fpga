@@ -815,6 +815,7 @@ void ci_service(void)
 		  rectangle_hrect_end_write(1915);
 		  rectangle_vrect_start_write(1);
 		  rectangle_vrect_end_write(1070);
+		  rectangle_rect_thresh_write(128); // "reasonable" default
 
 		  wprintf("out hres %d, hscan %d\r\n", hdmi_core_out0_initiator_hres_read(), hdmi_core_out0_initiator_hscan_read());
 		  wprintf("out vres %d, vscan %d\r\n", hdmi_core_out0_initiator_vres_read(), hdmi_core_out0_initiator_vscan_read());
@@ -843,6 +844,8 @@ void ci_service(void)
 		  hdmi_in0_decode_terc4_dvimode_write(1);
 		} else if (strcmp(token, "hdmimode") == 0 ) {
 		  hdmi_in0_decode_terc4_dvimode_write(0);
+		} else if( strcmp(token, "rectthresh") == 0) {
+		  rectangle_rect_thresh_write((unsigned short) strtoul(get_token(&str), NULL, 0)); 
 		} else
 			help_debug();
 	} else if (strncmp(token, "dummy", 5) == 0) {
