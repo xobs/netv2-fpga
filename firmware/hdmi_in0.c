@@ -26,7 +26,7 @@ int hdmi_in0_fb_index;
 //#define CLEAN_COMMUTATION
 #define DEBUG
 
-#define HDMI_IN0_PHASE_ADJUST_WER_THRESHOLD 10
+#define HDMI_IN0_PHASE_ADJUST_WER_THRESHOLD 2
 
 unsigned int hdmi_in0_framebuffer_base(char n) {
 	return HDMI_IN0_FRAMEBUFFERS_BASE + n*HDMI_IN0_FRAMEBUFFERS_SIZE;

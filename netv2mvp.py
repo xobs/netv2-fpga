@@ -9,7 +9,7 @@ from migen import *
 from migen.genlib.resetsync import AsyncResetSynchronizer
 
 from litex.build.generic_platform import *
-from litex.build.xilinx import XilinxPlatform
+from litex.build.xilinx import XilinxPlatform, VivadoProgrammer
 
 from litex.soc.integration.soc_sdram import *
 from litex.soc.integration.builder import *
@@ -30,7 +30,6 @@ from litevideo.output.hdmi.encoder import Encoder
 from litex.soc.interconnect.csr import *
 
 from liteeth.common import *
-
 
 _io = [
     ("clk50", 0, Pins("J19"), IOStandard("LVCMOS33")),
@@ -131,18 +130,33 @@ _io = [
         Subsignal("sda", Pins("V18"), IOStandard("LVCMOS33")),
     ),
 
+    # using normal HDMI cable
+    # ("hdmi_in", 1,
+    #     Subsignal("clk_p", Pins("Y18"), IOStandard("TMDS_33"), Inverted()),
+    #     Subsignal("clk_n", Pins("Y19"), IOStandard("TMDS_33"), Inverted()),
+    #     Subsignal("data0_p", Pins("AA18"), IOStandard("TMDS_33")),
+    #     Subsignal("data0_n", Pins("AB18"), IOStandard("TMDS_33")),
+    #     Subsignal("data1_p", Pins("AA19"), IOStandard("TMDS_33"), Inverted()),
+    #     Subsignal("data1_n", Pins("AB20"), IOStandard("TMDS_33"), Inverted()),
+    #     Subsignal("data2_p", Pins("AB21"), IOStandard("TMDS_33"), Inverted()),
+    #     Subsignal("data2_n", Pins("AB22"), IOStandard("TMDS_33"), Inverted()),
+    #     Subsignal("scl", Pins("W17"), IOStandard("LVCMOS33"), Inverted()),
+    #     Subsignal("sda", Pins("R17"), IOStandard("LVCMOS33")),
+    # ),
+
+    # using inverting jumper cable
     ("hdmi_in", 1,
-        Subsignal("clk_p", Pins("Y18"), IOStandard("TMDS_33"), Inverted()),
-        Subsignal("clk_n", Pins("Y19"), IOStandard("TMDS_33"), Inverted()),
-        Subsignal("data0_p", Pins("AA18"), IOStandard("TMDS_33")),
-        Subsignal("data0_n", Pins("AB18"), IOStandard("TMDS_33")),
-        Subsignal("data1_p", Pins("AA19"), IOStandard("TMDS_33"), Inverted()),
-        Subsignal("data1_n", Pins("AB20"), IOStandard("TMDS_33"), Inverted()),
-        Subsignal("data2_p", Pins("AB21"), IOStandard("TMDS_33"), Inverted()),
-        Subsignal("data2_n", Pins("AB22"), IOStandard("TMDS_33"), Inverted()),
-        Subsignal("scl", Pins("W17"), IOStandard("LVCMOS33"), Inverted()),
-        Subsignal("sda", Pins("R17"), IOStandard("LVCMOS33")),
-    ),
+     Subsignal("clk_p", Pins("Y18"), IOStandard("TMDS_33")),
+     Subsignal("clk_n", Pins("Y19"), IOStandard("TMDS_33")),
+     Subsignal("data0_p", Pins("AA18"), IOStandard("TMDS_33"), Inverted()),
+     Subsignal("data0_n", Pins("AB18"), IOStandard("TMDS_33"), Inverted()),
+     Subsignal("data1_p", Pins("AA19"), IOStandard("TMDS_33")),
+     Subsignal("data1_n", Pins("AB20"), IOStandard("TMDS_33")),
+     Subsignal("data2_p", Pins("AB21"), IOStandard("TMDS_33")),
+     Subsignal("data2_n", Pins("AB22"), IOStandard("TMDS_33")),
+     Subsignal("scl", Pins("W17"), IOStandard("LVCMOS33"), Inverted()),
+     Subsignal("sda", Pins("R17"), IOStandard("LVCMOS33")),
+     ),
 
     ("hdmi_out", 0,
         Subsignal("clk_p", Pins("W19"), Inverted(), IOStandard("TMDS_33")),
@@ -203,22 +217,24 @@ class Platform(XilinxPlatform):
         XilinxPlatform.__init__(self, "xc7a35t-fgg484-2", _io,
                                 toolchain=toolchain)
 
+        # NOTE: to do quad-SPI mode, the QE bit has to be set in the SPINOR status register
+        # OpenOCD won't do this natively, have to find a work-around (like using iMPACT to set it once)
         self.add_platform_command(
             "set_property CONFIG_VOLTAGE 3.3 [current_design]")
         self.add_platform_command(
             "set_property CFGBVS VCCO [current_design]")
         self.add_platform_command(
-            "set_property BITSTREAM.CONFIG.CONFIGRATE 22 [current_design]")
+            "set_property BITSTREAM.CONFIG.CONFIGRATE 66 [current_design]")
         self.add_platform_command(
-            "set_property BITSTREAM.CONFIG.SPI_BUSWIDTH 1 [current_design]")
+            "set_property BITSTREAM.CONFIG.SPI_BUSWIDTH 2 [current_design]")
         self.toolchain.bitstream_commands = [
-            "set_property CONFIG_VOLTAGE 1.5 [current_design]",
-            "set_property CFGBVS GND [current_design]",
-            "set_property BITSTREAM.CONFIG.CONFIGRATE 22 [current_design]",
-            "set_property BITSTREAM.CONFIG.SPI_BUSWIDTH 1 [current_design]",
+            "set_property CONFIG_VOLTAGE 3.3 [current_design]",
+            "set_property CFGBVS VCCO [current_design]",
+            "set_property BITSTREAM.CONFIG.CONFIGRATE 66 [current_design]",
+            "set_property BITSTREAM.CONFIG.SPI_BUSWIDTH 2 [current_design]",
         ]
         self.toolchain.additional_commands = \
-            ["write_cfgmem -verbose -force -format bin -interface spix1 -size 64 "
+            ["write_cfgmem -verbose -force -format bin -interface spix2 -size 64 "
              "-loadbit \"up 0x0 {build_name}.bit\" -file {build_name}.bin"]
         self.programmer = programmer
 
@@ -291,7 +307,7 @@ class CRG(Module):
                      o_CLKOUT3=pll_clk200,
 
                      # 50 MHz
-                     p_CLKOUT4_DIVIDE=1, p_CLKOUT4_PHASE=0.0,
+                     p_CLKOUT4_DIVIDE=32, p_CLKOUT4_PHASE=0.0,
                      o_CLKOUT4=pll_clk50,
 
             ),
@@ -668,42 +684,40 @@ class VideoOverlaySoC(BaseSoC):
         self.comb += platform.request("fpga_led5", 0).eq(self.hdmi_in1.clocking.locked)  # OV0 green
 
         # analyzer ethernet
-        from liteeth.phy.rmii import LiteEthPHYRMII
-        from liteeth.core import LiteEthUDPIPCore
-        from liteeth.frontend.etherbone import LiteEthEtherbone
+#        from liteeth.phy.rmii import LiteEthPHYRMII
+#        from liteeth.core import LiteEthUDPIPCore
+#        from liteeth.frontend.etherbone import LiteEthEtherbone
 
-        self.submodules.phy = phy = LiteEthPHYRMII(platform.request("rmii_eth_clocks"), platform.request("rmii_eth"))
-        mac_address = 0x1337320dbabe
-        ip_address="10.0.245.16"
-        self.submodules.core = LiteEthUDPIPCore(self.phy, mac_address, convert_ip(ip_address), int(100e6))
-        self.submodules.etherbone = LiteEthEtherbone(self.core.udp, 1234, mode="master")
-        self.add_wb_master(self.etherbone.wishbone.bus)
+#        self.submodules.phy = phy = LiteEthPHYRMII(platform.request("rmii_eth_clocks"), platform.request("rmii_eth"))
+#        mac_address = 0x1337320dbabe
+#        ip_address="10.0.245.16"
+#        self.submodules.core = LiteEthUDPIPCore(self.phy, mac_address, convert_ip(ip_address), int(100e6))
+#        self.submodules.etherbone = LiteEthEtherbone(self.core.udp, 1234, mode="master")
+#        self.add_wb_master(self.etherbone.wishbone.bus)
 
-        self.platform.add_false_path_constraints(
-           self.crg.cd_sys.clk,
-           self.crg.cd_eth.clk
-        )
+#        self.platform.add_false_path_constraints(
+#           self.crg.cd_sys.clk,
+#           self.crg.cd_eth.clk
+#        )
 
-        # analyzer
-#        from litex.soc.cores.uart import UARTWishboneBridge
+        # analyzer UART
+        from litex.soc.cores.uart import UARTWishboneBridge
+        #            platform.request("serial",1), self.clk_freq, baudrate=3000000)
+        self.submodules.bridge = UARTWishboneBridge(
+            platform.request("serial",1), self.clk_freq, baudrate=115200)
+        self.add_wb_master(self.bridge.wishbone)
+
         from litescope import LiteScopeAnalyzer
 
-        #            platform.request("serial",1), self.clk_freq, baudrate=3000000)
-#        self.submodules.bridge = UARTWishboneBridge(
-#            platform.request("serial",1), self.clk_freq, baudrate=115200)
-#        self.add_wb_master(self.bridge.wishbone)
-
         analyzer_signals = [
-            hdmi_in0_timing,
-            self.hdmi_in0.syncpol.hsync,
-            self.hdmi_in0.syncpol.vsync,
-            self.hdmi_in0.syncpol.de,
-            self.hdmi_in0.chansync.data_in0.de,
-#            self.hdmi_in0.decode_terc4.de_o,
-            self.hdmi_in0.chansync.data_out0,
-            self.hdmi_in0.data0_decod.output,
-        ]
-        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 256, cd="hdmi_in0_pix", cd_ratio=2)
+            self.hdmi_in1.syncpol.hsync,
+            self.hdmi_in1.syncpol.vsync,
+            self.hdmi_in1.syncpol.de,
+            self.hdmi_in1.syncpol.valid_o,
+            self.hdmi_in1.chansync.data_out0,
+            self.hdmi_in1.frame.g,
+            ]
+        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 256, cd="hdmi_in1_pix", cd_ratio=2)
 
     def do_exit(self, vns):
         self.analyzer.export_csv(vns, "test/analyzer.csv")
