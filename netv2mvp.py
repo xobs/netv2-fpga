@@ -282,32 +282,32 @@ class CRG(Module):
         pll_clk200 = Signal()
         pll_clk50 = Signal()
         self.specials += [
-            Instance("PLLE2_BASE",
-                     p_STARTUP_WAIT="FALSE", o_LOCKED=pll_locked,
+            Instance("MMCME2_ADV",
+                     p_STARTUP_WAIT="FALSE", o_LOCKED=pll_locked, p_SS_EN="TRUE", p_SS_MODE="DOWN_LOW", p_BANDWIDTH="LOW",
 
                      # VCO @ 1600 MHz
                      p_REF_JITTER1=0.01, p_CLKIN1_PERIOD=20.0,
-                     p_CLKFBOUT_MULT=32, p_DIVCLK_DIVIDE=1,
+                     p_CLKFBOUT_MULT_F=16.0, p_DIVCLK_DIVIDE=1,
                      i_CLKIN1=clk50, i_CLKFBIN=pll_fb, o_CLKFBOUT=pll_fb,
 
                      # 100 MHz
-                     p_CLKOUT0_DIVIDE=16, p_CLKOUT0_PHASE=0.0,
+                     p_CLKOUT0_DIVIDE_F=8, p_CLKOUT0_PHASE=0.0,
                      o_CLKOUT0=self.pll_sys,
 
                      # 400 MHz
-                     p_CLKOUT1_DIVIDE=4, p_CLKOUT1_PHASE=0.0,
+                     p_CLKOUT1_DIVIDE=2, p_CLKOUT1_PHASE=0.0,
                      o_CLKOUT1=pll_sys4x,
 
                      # 400 MHz dqs
-                     p_CLKOUT2_DIVIDE=4, p_CLKOUT2_PHASE=90.0,
-                     o_CLKOUT2=pll_sys4x_dqs,
+                     p_CLKOUT5_DIVIDE=2, p_CLKOUT5_PHASE=90.0,
+                     o_CLKOUT5=pll_sys4x_dqs,
 
                      # 200 MHz
-                     p_CLKOUT3_DIVIDE=8, p_CLKOUT3_PHASE=0.0,
-                     o_CLKOUT3=pll_clk200,
+                     p_CLKOUT6_DIVIDE=4, p_CLKOUT6_PHASE=0.0,
+                     o_CLKOUT6=pll_clk200,
 
                      # 50 MHz
-                     p_CLKOUT4_DIVIDE=32, p_CLKOUT4_PHASE=0.0,
+                     p_CLKOUT4_DIVIDE=16, p_CLKOUT4_PHASE=0.0,
                      o_CLKOUT4=pll_clk50,
 
             ),
@@ -321,6 +321,8 @@ class CRG(Module):
             AsyncResetSynchronizer(self.cd_clk200, ~pll_locked | rst),
             AsyncResetSynchronizer(self.cd_clk100, ~pll_locked | rst)
         ]
+        platform.add_platform_command(
+            "set_property CLOCK_DEDICATED_ROUTE BACKBONE [get_nets clk50_IBUF]")
 
         reset_counter = Signal(4, reset=15)
         ic_reset = Signal(reset=1)
