@@ -288,7 +288,7 @@ class CRG(Module):
         pll_ss_locked = Signal()
         self.specials += [
             Instance("MMCME2_ADV",
-                     p_BANDWIDTH="LOW", p_SS_EN="TRUE", p_SS_MODE="DOWN_LOW",
+                     p_BANDWIDTH="LOW", p_SS_EN="TRUE", p_SS_MODE="DOWN_HIGH",
                      o_LOCKED=pll_ss_locked,
 
                      # VCO
