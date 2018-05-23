@@ -128,6 +128,8 @@ _io = [
 #        Subsignal("data0_n", Pins("H22"), IOStandard("TMDS_33"), Inverted()),
         Subsignal("scl", Pins("T18"), IOStandard("LVCMOS33")),
         Subsignal("sda", Pins("V18"), IOStandard("LVCMOS33")),
+        Subsignal("hpd_en", Pins("M22"), IOStandard("LVCMOS33")),  # RX0_FORCEUNPLUG
+        Subsignal("hpd_notif", Pins("U17"), IOStandard("LVCMOS33")),  # HDMI_HPD_LL_N (note active low)
     ),
 
     # using normal HDMI cable
@@ -339,7 +341,8 @@ class CRG(Module):
             Instance("BUFG", i_I=pll_clk50, o_O=self.cd_eth.clk),
             AsyncResetSynchronizer(self.cd_sys, ~pll_locked | rst | ~pll_ss_locked),
             AsyncResetSynchronizer(self.cd_clk200, ~pll_locked | rst | ~pll_ss_locked),
-            AsyncResetSynchronizer(self.cd_clk100, ~pll_locked | rst | ~pll_ss_locked)
+            AsyncResetSynchronizer(self.cd_clk100, ~pll_locked | rst | ~pll_ss_locked),
+            AsyncResetSynchronizer(self.cd_eth, ~pll_locked | rst | ~pll_ss_locked)
         ]
 
         platform.add_platform_command(
@@ -404,6 +407,29 @@ class BaseSoC(SoCSDRAM):
         sys_counter = Signal(32)
         self.sync += sys_counter.eq(sys_counter + 1)
         self.comb += self.sys_led.eq(sys_counter[26])
+
+class I2Csnoop(Module, AutoCSR):
+    def __init__(self, pads):
+        self.edid_snoop_adr = CSRStorage(8)
+        self.edid_snoop_dat = CSRStatus(8)
+
+        reg_dout = Signal(8)
+        self.An = Signal(64)   # An as read out
+        self.Aksv14_write = Signal()  # Ksv byte 14 complete strobe
+        self.specials += [
+            Instance("i2c_snoop",
+                     i_SDA=~pads.sda,
+                     i_SCL=~pads.scl,
+                     i_clk=ClockSignal("eth"),
+                     i_reset=ResetSignal("eth"),
+                     i_i2c_snoop_addr=0x74,
+                     i_reg_addr=self.edid_snoop_adr.storage,
+                     o_reg_dout=reg_dout,
+                     o_An=self.An,
+                     o_Aksv14_write=self.Aksv14_write,
+                     )
+        ]
+        self.comb += self.edid_snoop_dat.status.eq(reg_dout)
 
 
 class RectOpening(Module, AutoCSR):
@@ -483,6 +509,7 @@ class VideoOverlaySoC(BaseSoC):
         "hdmi_in1_freq",
         "hdmi_in1_edid_mem",  
         "rectangle",
+        "i2c_snoop",
         "analyzer",
         "phy",
         "core"
@@ -705,6 +732,16 @@ class VideoOverlaySoC(BaseSoC):
         self.comb += platform.request("fpga_led3", 0).eq(0)  # RX0 red
         self.comb += platform.request("fpga_led4", 0).eq(0)  # OV0 red
         self.comb += platform.request("fpga_led5", 0).eq(self.hdmi_in1.clocking.locked)  # OV0 green
+
+        ##### HDCP overlay engine
+        platform.add_source(os.path.join("overlay", "i2c_snoop.v"))
+        platform.add_source(os.path.join("overlay", "diff_network.v"))
+        platform.add_source(os.path.join("overlay", "hdcp_block.v"))
+        platform.add_source(os.path.join("overlay", "hdcp_cipher.v"))
+        platform.add_source(os.path.join("overlay", "hdcp_lfsr.v"))
+        platform.add_source(os.path.join("overlay", "shuffle_network.v"))
+
+        self.submodules.i2c_snoop = i2c_snoop = I2Csnoop(hdmi_in0_pads)  # need to figure out how to pass in the 50MHz clock
 
         # analyzer ethernet
 #        from liteeth.phy.rmii import LiteEthPHYRMII
