@@ -850,6 +850,16 @@ void ci_service(void)
 		  hdmi_in1_decode_terc4_dvimode_write(0);
 		} else if( strcmp(token, "rectthresh") == 0) {
 		  rectangle_rect_thresh_write((unsigned short) strtoul(get_token(&str), NULL, 0)); 
+		} else if( strcmp(token, "dumpe" == 0 ) ) {
+		  int i ;
+		  for( i = 0; i < 256; i++ ) {
+		    if( (i % 16) == 0 ) {
+		      wprintf( "\r\n %02x: ", i );
+		    }
+		    i2c_snoop_edid_snoop_adr_write( i );
+		    // may need to add a delay to allow write->read access time
+		    wprintf( "%02x ", i2c_snoop_edid_snoop_dat_read() );
+		  }
 		} else
 			help_debug();
 	} else if (strncmp(token, "dummy", 5) == 0) {
