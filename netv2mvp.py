@@ -128,9 +128,11 @@ _io = [
 #        Subsignal("data0_n", Pins("H22"), IOStandard("TMDS_33"), Inverted()),
         Subsignal("scl", Pins("T18"), IOStandard("LVCMOS33")),
         Subsignal("sda", Pins("V18"), IOStandard("LVCMOS33")),
-        Subsignal("hpd_en", Pins("M22"), IOStandard("LVCMOS33")),  # RX0_FORCEUNPLUG
-        Subsignal("hpd_notif", Pins("U17"), IOStandard("LVCMOS33")),  # HDMI_HPD_LL_N (note active low)
+#        Subsignal("hpd_en", Pins("M22"), IOStandard("LVCMOS33")),  # RX0_FORCEUNPLUG
+#        Subsignal("hpd_notif", Pins("U17"), IOStandard("LVCMOS33")),  # HDMI_HPD_LL_N (note active low)
     ),
+
+    ("hpd_en", 0, Pins("M22"), IOStandard("LVCMOS33")),
 
     # using normal HDMI cable
     # ("hdmi_in", 1,
@@ -431,6 +433,47 @@ class I2Csnoop(Module, AutoCSR):
         ]
         self.comb += self.edid_snoop_dat.status.eq(reg_dout)
 
+class HDCP(Module, AutoCSR):
+    def __init__(self, timing_stream):
+
+        self.de = timing_stream.de
+        self.hsync = timing_stream.hsync
+        self.vsync = timing_stream.vsync
+        self.line_end = timing_stream.de  # this may need some additional adjustment
+
+        self.hpd = Signal()
+        self.Aksv14_write = Signal()
+        self.ctl_code = Signal(4)
+        self.An = Signal(64)
+
+        self.Km = CSRStorage(56)
+        self.Km_valid = CSRStorage()
+        self.hdcp_ena = CSRStorage()
+        self.hpd_ena = CSRStorage()
+
+        self.cipher_stream = Signal(24)
+        self.stream_ready = Signal()
+
+        self.specials += [
+            Instance("hdcp_mod",
+                     i_clk=ClockSignal("pix_o"),
+                     i_rst=ResetSignal("pix_o"),
+                     i_de=self.de,
+                     i_hsync=self.hsync,
+                     i_vsync=self.vsync,
+                     i_ctl_code=self.ctl_code,
+                     i_line_end=self.line_end,
+                     i_hpd=self.hpd,
+                     i_Aksv14_write = self.Aksv14_write,
+                     i_An = self.An,
+                     i_Km = self.Km.storage,
+                     i_Km_valid = self.Km_valid.storage,
+                     i_hdcp_ena = self.hdcp_ena.storage,
+                     o_cipher_stream = self.cipher_stream,
+                     o_stream_ready = self.stream_ready,
+                     )
+        ]
+
 
 class RectOpening(Module, AutoCSR):
     def __init__(self, timing_stream):
@@ -509,6 +552,7 @@ class VideoOverlaySoC(BaseSoC):
         "hdmi_in1_freq",
         "hdmi_in1_edid_mem",  
         "rectangle",
+        "hdcp",
         "i2c_snoop",
         "analyzer",
         "phy",
@@ -531,7 +575,7 @@ class VideoOverlaySoC(BaseSoC):
         ########## hdmi in 0 (raw tmds)
         hdmi_in0_pads = platform.request("hdmi_in", 0)
         self.submodules.hdmi_in0_freq = FrequencyMeter(period=self.clk_freq)
-        self.submodules.hdmi_in0 = HDMIIn(hdmi_in0_pads, device="xc7", split_mmcm=True, hdmi=True)
+        self.submodules.hdmi_in0 = hdmi_in0 = HDMIIn(hdmi_in0_pads, device="xc7", split_mmcm=True, hdmi=True)
         self.comb += self.hdmi_in0_freq.clk.eq(self.hdmi_in0.clocking.cd_pix.clk)
         # don't add clock timings here, we add a root clock constraint that derives the rest automatically
 
@@ -662,6 +706,7 @@ class VideoOverlaySoC(BaseSoC):
             core_source_data_d.eq(self.hdmi_core_out0.source.data),
         ]
 
+        ####### timing stream extraction
         timing_rgb_delay = TimingDelayRGB(4) # create the delay element with specified delay...note if you say TimingDelay() the code runs happily with no error, because Python doesn't typecheck
         timing_rgb_delay = ClockDomainsRenamer("pix_o")(timing_rgb_delay) # assign a clock domain to the delay element
         self.submodules += timing_rgb_delay  # DONT FORGET THIS LINE OR ELSE NOTHING HAPPENS....
@@ -678,21 +723,46 @@ class VideoOverlaySoC(BaseSoC):
             # the output records are directly consumed down below
         ]
 
+        ##### HDCP engine
+        platform.add_source(os.path.join("overlay", "i2c_snoop.v"))
+        platform.add_source(os.path.join("overlay", "diff_network.v"))
+        platform.add_source(os.path.join("overlay", "hdcp_block.v"))
+        platform.add_source(os.path.join("overlay", "hdcp_cipher.v"))
+        platform.add_source(os.path.join("overlay", "hdcp_lfsr.v"))
+        platform.add_source(os.path.join("overlay", "shuffle_network.v"))
+        platform.add_source(os.path.join("overlay", "hdcp_mod.v"))
+
+        self.submodules.i2c_snoop = i2c_snoop = I2Csnoop(hdmi_in0_pads)
+        self.submodules.hdcp = hdcp = HDCP(hdmi_in0_timing)
+        self.comb += [
+            hdcp.hpd.eq(hdmi_in0.edid._hpd_notif.status),
+            hdcp.Aksv14_write.eq(i2c_snoop.Aksv14_write),
+            hdcp.An.eq(i2c_snoop.An),
+            hdcp.ctl_code.eq(hdmi_in0.decode_terc4.ctl_code),
+        ]
+        platform.request("hpd_en").eq(hdcp.hdcp_ena.storage),
+
+        ###### overlay pixel encoders
         self.submodules.encoder_red = encoder_red = ClockDomainsRenamer("pix_o")(Encoder())
         self.submodules.encoder_grn = encoder_grn = ClockDomainsRenamer("pix_o")(Encoder())
         self.submodules.encoder_blu = encoder_blu = ClockDomainsRenamer("pix_o")(Encoder())
 
         self.comb += [
-
-            encoder_red.d.eq(hdmi_out0_rgb.r),
+            If(hdcp.hdcp_ena.storage,
+               encoder_red.d.eq(hdmi_out0_rgb.r ^ hdcp.cipher_stream[16:]), # 23:16
+               encoder_grn.d.eq(hdmi_out0_rgb.g ^ hdcp.cipher_stream[8:16]),  # 15:8
+               encoder_blu.d.eq(hdmi_out0_rgb.b ^ hdcp.cipher_stream[0:8]),  # 7:0
+            ).Else(
+                encoder_red.d.eq(hdmi_out0_rgb.r),
+                encoder_grn.d.eq(hdmi_out0_rgb.g),
+                encoder_blu.d.eq(hdmi_out0_rgb.b),
+            ),
             encoder_red.de.eq(1),
             encoder_red.c.eq(0), # we promise to use this only during video areas, so "c" is always 0
 
-            encoder_grn.d.eq(hdmi_out0_rgb.g),
             encoder_grn.de.eq(1),
             encoder_grn.c.eq(0),
 
-            encoder_blu.d.eq(hdmi_out0_rgb.b),
             encoder_blu.de.eq(1),
             encoder_blu.c.eq(0),
         ]
@@ -733,32 +803,22 @@ class VideoOverlaySoC(BaseSoC):
         self.comb += platform.request("fpga_led4", 0).eq(0)  # OV0 red
         self.comb += platform.request("fpga_led5", 0).eq(self.hdmi_in1.clocking.locked)  # OV0 green
 
-        ##### HDCP overlay engine
-        platform.add_source(os.path.join("overlay", "i2c_snoop.v"))
-        platform.add_source(os.path.join("overlay", "diff_network.v"))
-        platform.add_source(os.path.join("overlay", "hdcp_block.v"))
-        platform.add_source(os.path.join("overlay", "hdcp_cipher.v"))
-        platform.add_source(os.path.join("overlay", "hdcp_lfsr.v"))
-        platform.add_source(os.path.join("overlay", "shuffle_network.v"))
-
-        self.submodules.i2c_snoop = i2c_snoop = I2Csnoop(hdmi_in0_pads)  # need to figure out how to pass in the 50MHz clock
-
         # analyzer ethernet
-#        from liteeth.phy.rmii import LiteEthPHYRMII
-#        from liteeth.core import LiteEthUDPIPCore
-#        from liteeth.frontend.etherbone import LiteEthEtherbone
+        from liteeth.phy.rmii import LiteEthPHYRMII
+        from liteeth.core import LiteEthUDPIPCore
+        from liteeth.frontend.etherbone import LiteEthEtherbone
 
-#        self.submodules.phy = phy = LiteEthPHYRMII(platform.request("rmii_eth_clocks"), platform.request("rmii_eth"))
-#        mac_address = 0x1337320dbabe
-#        ip_address="10.0.245.16"
-#        self.submodules.core = LiteEthUDPIPCore(self.phy, mac_address, convert_ip(ip_address), int(100e6))
-#        self.submodules.etherbone = LiteEthEtherbone(self.core.udp, 1234, mode="master")
-#        self.add_wb_master(self.etherbone.wishbone.bus)
+        self.submodules.phy = phy = LiteEthPHYRMII(platform.request("rmii_eth_clocks"), platform.request("rmii_eth"))
+        mac_address = 0x1337320dbabe
+        ip_address="10.0.245.16"
+        self.submodules.core = LiteEthUDPIPCore(self.phy, mac_address, convert_ip(ip_address), int(100e6))
+        self.submodules.etherbone = LiteEthEtherbone(self.core.udp, 1234, mode="master")
+        self.add_wb_master(self.etherbone.wishbone.bus)
 
-#        self.platform.add_false_path_constraints(
-#           self.crg.cd_sys.clk,
-#           self.crg.cd_eth.clk
-#        )
+        self.platform.add_false_path_constraints(
+           self.crg.cd_sys.clk,
+           self.crg.cd_eth.clk
+        )
 
         # analyzer UART
         from litex.soc.cores.uart import UARTWishboneBridge
@@ -769,15 +829,21 @@ class VideoOverlaySoC(BaseSoC):
 
         from litescope import LiteScopeAnalyzer
 
+        pix_aggregate = Signal(24)
+        self.comb += pix_aggregate.eq(Cat(hdmi_out0_rgb.r, hdmi_out0_rgb.g, hdmi_out0_rgb.b))
         analyzer_signals = [
-            self.hdmi_in1.syncpol.hsync,
-            self.hdmi_in1.syncpol.vsync,
-            self.hdmi_in1.syncpol.de,
-            self.hdmi_in1.syncpol.valid_o,
-            self.hdmi_in1.chansync.data_out0,
-            self.hdmi_in1.frame.g,
-            ]
-        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 256, cd="hdmi_in1_pix", cd_ratio=2)
+            self.hdcp.cipher_stream,
+            pix_aggregate,
+            self.hdcp.stream_ready,
+            self.hdcp.de,
+            self.hdcp.hsync,
+            self.hdcp.vsync,
+            self.hdcp.Aksv14_write,
+            self.hdcp.hpd,
+            self.hdcp.ctl_code,
+            self.hdcp.line_end,
+        ]
+        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 256, cd="pix_o", cd_ratio=2)
 
     def do_exit(self, vns):
         self.analyzer.export_csv(vns, "test/analyzer.csv")

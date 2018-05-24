@@ -258,6 +258,7 @@ static void status_print(void)
 	wprintf(" (@ %3d.%2d MHz)", hdmi_in1_freq_value_read() / 1000000,
 		                        (hdmi_in1_freq_value_read() / 10000) % 100);
 #endif
+	wprintf( "xadc: %d mC\n", ((unsigned int)xadc_temperature_read() * 503975) / 4096 - 273150 );
 	wprintf("\r\n");
 #endif
 
@@ -789,9 +790,6 @@ void ci_service(void)
 #endif
 			if(found == 0)
 				wprintf("%s port has no EDID capabilities\r\n", token);
-		} else if(strcmp(token, "dma") == 0 ) {
-		  wprintf("initiating DMA on HDMI1\r\n");
-		  hdmi_in1_dma_ev_enable_write(0x3);
 		} else if(strcmp(token, "rect") == 0 ) {
 		  wprintf("enabling video_out0 writing\r\n");
 		  hdmi_core_out0_initiator_enable_write(0);
@@ -840,16 +838,10 @@ void ci_service(void)
 		} else if (strcmp(token, "delay") == 0) {
 		  hdmi_core_out0_dma_delay_base_write((unsigned int) strtoul(get_token(&str), NULL, 0));
 		  wprintf("delay value: %d\r\n", hdmi_core_out0_dma_delay_base_read());
-		} else if (strcmp(token, "dvimode0") == 0 ) {
-		  hdmi_in0_decode_terc4_dvimode_write(1);
-		} else if (strcmp(token, "hdmimode0") == 0 ) {
-		  hdmi_in0_decode_terc4_dvimode_write(0);
-		} else if (strcmp(token, "dvimode1") == 0 ) {
-		  hdmi_in1_decode_terc4_dvimode_write(1);
-		} else if (strcmp(token, "hdmimode1") == 0 ) {
-		  hdmi_in1_decode_terc4_dvimode_write(0);
 		} else if( strcmp(token, "rectthresh") == 0) {
 		  rectangle_rect_thresh_write((unsigned short) strtoul(get_token(&str), NULL, 0)); 
+		} else if( strcmp(token, "xadc") == 0) {
+		  wprintf( "xadc: %d mC\n", ((unsigned int)xadc_temperature_read() * 503975) / 4096 - 273150 );
 		} else if( strcmp(token, "dumpe" == 0 ) ) {
 		  int i ;
 		  for( i = 0; i < 256; i++ ) {
@@ -872,3 +864,25 @@ void ci_service(void)
       ci_prompt();
     }
 }
+
+/*
+  else if( strcmp(token, "hpdforce" == 0) ) {
+		  hdcp_hpd_ena_write(1);
+		} else if( strcmp(token, "hpdrelax" == 0) ) {
+		  hdcp_hpd_ena_write(0);
+		}
+
+		else if (strcmp(token, "dvimode0") == 0 ) {
+		  hdmi_in0_decode_terc4_dvimode_write(1);
+		} else if (strcmp(token, "hdmimode0") == 0 ) {
+		  hdmi_in0_decode_terc4_dvimode_write(0);
+		} else if (strcmp(token, "dvimode1") == 0 ) {
+		  hdmi_in1_decode_terc4_dvimode_write(1);
+		} else if (strcmp(token, "hdmimode1") == 0 ) {
+		  hdmi_in1_decode_terc4_dvimode_write(0);
+		}
+		else if(strcmp(token, "dma") == 0 ) {
+		wprintf("initiating DMA on HDMI1\r\n");
+		  hdmi_in1_dma_ev_enable_write(0x3);
+		}
+*/

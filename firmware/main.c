@@ -48,7 +48,7 @@ int main(void)
 	printf( "hdmi_in1_dma_ev_enable_read %x\n", hdmi_in1_dma_ev_enable_read() );
 
 	processor_hdmi_out0_source = VIDEO_IN_HDMI_IN1;  // this is hard-wired in this scenario
-	
+
 	while(1) {
 		processor_service();
 		ci_service();
