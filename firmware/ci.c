@@ -258,9 +258,9 @@ static void status_print(void)
 	wprintf(" (@ %3d.%2d MHz)", hdmi_in1_freq_value_read() / 1000000,
 		                        (hdmi_in1_freq_value_read() / 10000) % 100);
 #endif
-	wprintf( "xadc: %d mC\n", ((unsigned int)xadc_temperature_read() * 503975) / 4096 - 273150 );
 	wprintf("\r\n");
 #endif
+	wprintf( "xadc: %d mC\n\r", ((unsigned int)xadc_temperature_read() * 503975) / 4096 - 273150 );
 
 #ifdef CSR_HDMI_OUT0_BASE
 	unsigned int underflows;
