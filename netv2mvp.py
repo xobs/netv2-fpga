@@ -272,7 +272,7 @@ class CRG(Module):
         self.clock_domains.cd_sys4x = ClockDomain(reset_less=True)
         self.clock_domains.cd_sys4x_dqs = ClockDomain(reset_less=True)
         self.clock_domains.cd_clk200 = ClockDomain()
-        self.clock_domains.cd_clk100 = ClockDomain()
+#        self.clock_domains.cd_clk100 = ClockDomain()
         self.clock_domains.cd_eth = ClockDomain()
 
         clk50 = platform.request("clk50")
@@ -286,25 +286,30 @@ class CRG(Module):
         pll_clk200 = Signal()
         pll_clk50 = Signal()
 
-        ss_fb = Signal()
-        clk50_ss = Signal()
-        clk50_ss_buf = Signal()
-        pll_ss_locked = Signal()
-        self.specials += [
-            Instance("MMCME2_ADV",
-                     p_BANDWIDTH="LOW", p_SS_EN="TRUE", p_SS_MODE="DOWN_HIGH",
-                     o_LOCKED=pll_ss_locked,
+        # ss_fb = Signal()
+        # clk50_ss = Signal()
+        # clk50_ss_buf = Signal()
+        # pll_ss_locked = Signal()
+        # self.specials += [
+        #     Instance("MMCME2_ADV",
+        #              p_BANDWIDTH="LOW", p_SS_EN="TRUE", p_SS_MODE="DOWN_HIGH",
+        #              o_LOCKED=pll_ss_locked,
+        #
+        #              # VCO
+        #              p_REF_JITTER1=0.01, p_CLKIN1_PERIOD=20.0,
+        #              p_CLKFBOUT_MULT_F=56.0, p_CLKFBOUT_PHASE=0.000, p_DIVCLK_DIVIDE=4,
+        #              i_CLKIN1=clk50, i_CLKFBIN=ss_fb, o_CLKFBOUT=ss_fb,
+        #
+        #              # pix clk
+        #              p_CLKOUT0_DIVIDE_F=14, p_CLKOUT0_PHASE=0.000, o_CLKOUT0=clk50_ss,
+        #              ),
+        #     Instance("BUFG", i_I=clk50_ss, o_O=clk50_ss_buf),
+        # ]
 
-                     # VCO
-                     p_REF_JITTER1=0.01, p_CLKIN1_PERIOD=20.0,
-                     p_CLKFBOUT_MULT_F=56.0, p_CLKFBOUT_PHASE=0.000, p_DIVCLK_DIVIDE=4,
-                     i_CLKIN1=clk50, i_CLKFBIN=ss_fb, o_CLKFBOUT=ss_fb,
+#        platform.add_platform_command(
+#            "set_property CLOCK_DEDICATED_ROUTE BACKBONE [get_nets clk50_IBUF]")
 
-                     # pix clk
-                     p_CLKOUT0_DIVIDE_F=14, p_CLKOUT0_PHASE=0.000, o_CLKOUT0=clk50_ss,
-                     ),
-            Instance("BUFG", i_I=clk50_ss, o_O=clk50_ss_buf),
-        ]
+        pll_fb_bufg = Signal()
         self.specials += [
             Instance("PLLE2_BASE",
                      p_STARTUP_WAIT="FALSE", o_LOCKED=pll_locked,
@@ -312,7 +317,7 @@ class CRG(Module):
                      # VCO @ 1600 MHz
                      p_REF_JITTER1=0.01, p_CLKIN1_PERIOD=20.0,
                      p_CLKFBOUT_MULT=32, p_DIVCLK_DIVIDE=1,
-                     i_CLKIN1=clk50_ss_buf, i_CLKFBIN=pll_fb, o_CLKFBOUT=pll_fb,
+                     i_CLKIN1=clk50, i_CLKFBIN=pll_fb_bufg, o_CLKFBOUT=pll_fb, # change to i_CLKIN1=clk50_ss_buf
 
                      # 100 MHz
                      p_CLKOUT0_DIVIDE=16, p_CLKOUT0_PHASE=0.0,
@@ -336,19 +341,17 @@ class CRG(Module):
 
             ),
             Instance("BUFG", i_I=self.pll_sys, o_O=self.cd_sys.clk),
-            Instance("BUFG", i_I=self.pll_sys, o_O=self.cd_clk100.clk),
+            Instance("BUFG", i_I=pll_fb, o_O=pll_fb_bufg),
+#            Instance("BUFG", i_I=self.pll_sys, o_O=self.cd_clk100.clk),
             Instance("BUFG", i_I=pll_clk200, o_O=self.cd_clk200.clk),
             Instance("BUFG", i_I=pll_sys4x, o_O=self.cd_sys4x.clk),
             Instance("BUFG", i_I=pll_sys4x_dqs, o_O=self.cd_sys4x_dqs.clk),
             Instance("BUFG", i_I=pll_clk50, o_O=self.cd_eth.clk),
-            AsyncResetSynchronizer(self.cd_sys, ~pll_locked | rst | ~pll_ss_locked),
-            AsyncResetSynchronizer(self.cd_clk200, ~pll_locked | rst | ~pll_ss_locked),
-            AsyncResetSynchronizer(self.cd_clk100, ~pll_locked | rst | ~pll_ss_locked),
-            AsyncResetSynchronizer(self.cd_eth, ~pll_locked | rst | ~pll_ss_locked)
+            AsyncResetSynchronizer(self.cd_sys, ~pll_locked | rst), # add | ~pll_ss_locked when using SS
+            AsyncResetSynchronizer(self.cd_clk200, ~pll_locked | rst),
+#            AsyncResetSynchronizer(self.cd_clk100, ~pll_locked | rst | ~pll_ss_locked),
+            AsyncResetSynchronizer(self.cd_eth, ~pll_locked | rst)
         ]
-
-        platform.add_platform_command(
-            "set_property CLOCK_DEDICATED_ROUTE BACKBONE [get_nets clk50_IBUF]")
 
         reset_counter = Signal(4, reset=15)
         ic_reset = Signal(reset=1)
@@ -684,13 +687,13 @@ class VideoOverlaySoC(BaseSoC):
         self.platform.add_platform_command("set_false_path -through [get_nets hdmi_in1_pix1p25x_rst]")
         self.platform.add_platform_command("set_false_path -through [get_nets hdmi_in0_pix1p25x_rst]")
         self.platform.add_platform_command("set_false_path -through [get_nets pix_o_rst]")
-        self.platform.add_platform_command("set_false_path -through [get_nets videooverlaysoc_hdmi_out0_clk_gen_ce]") # derived from reset
+        self.platform.add_platform_command("set_false_path -through [get_nets soc_videooverlaysoc_hdmi_out0_clk_gen_ce]") # derived from reset
 
         # gearbox timing is a multi-cycle path: FAST to SLOW synchronous clock domains
-        self.platform.add_platform_command("set_multicycle_path 2 -setup -start -from [get_clocks videooverlaysoc_hdmi_in0_mmcm_clk1] -to [get_clocks videooverlaysoc_hdmi_in0_mmcm_clk0]")
-        self.platform.add_platform_command("set_multicycle_path 1 -hold -from [get_clocks videooverlaysoc_hdmi_in0_mmcm_clk1] -to [get_clocks videooverlaysoc_hdmi_in0_mmcm_clk0]")
-        self.platform.add_platform_command("set_multicycle_path 2 -setup -start -from [get_clocks videooverlaysoc_hdmi_in1_mmcm_clk1] -to [get_clocks videooverlaysoc_hdmi_in1_mmcm_clk0]")
-        self.platform.add_platform_command("set_multicycle_path 1 -hold -from [get_clocks videooverlaysoc_hdmi_in1_mmcm_clk1] -to [get_clocks videooverlaysoc_hdmi_in1_mmcm_clk0]")
+        self.platform.add_platform_command("set_multicycle_path 2 -setup -start -from [get_clocks soc_videooverlaysoc_hdmi_in0_mmcm_clk1] -to [get_clocks soc_videooverlaysoc_hdmi_in0_mmcm_clk0]")
+        self.platform.add_platform_command("set_multicycle_path 1 -hold -from [get_clocks soc_videooverlaysoc_hdmi_in0_mmcm_clk1] -to [get_clocks soc_videooverlaysoc_hdmi_in0_mmcm_clk0]")
+        self.platform.add_platform_command("set_multicycle_path 2 -setup -start -from [get_clocks soc_videooverlaysoc_hdmi_in1_mmcm_clk1] -to [get_clocks soc_videooverlaysoc_hdmi_in1_mmcm_clk0]")
+        self.platform.add_platform_command("set_multicycle_path 1 -hold -from [get_clocks soc_videooverlaysoc_hdmi_in1_mmcm_clk1] -to [get_clocks soc_videooverlaysoc_hdmi_in1_mmcm_clk0]")
 
 
         ###############  hdmi out 1 (overlay rgb)
@@ -734,9 +737,9 @@ class VideoOverlaySoC(BaseSoC):
 
         self.submodules.i2c_snoop = i2c_snoop = I2Csnoop(hdmi_in0_pads)
         self.submodules.hdcp = hdcp = HDCP(hdmi_in0_timing)
-        self.comb += [
-            hdcp.hpd.eq(hdmi_in0.edid._hpd_notif.status),
+        self.sync.pix_o += [
             hdcp.Aksv14_write.eq(i2c_snoop.Aksv14_write),
+            hdcp.hpd.eq(hdmi_in0.edid._hpd_notif.status),
             hdcp.An.eq(i2c_snoop.An),
             hdcp.ctl_code.eq(hdmi_in0.decode_terc4.ctl_code),
         ]
@@ -821,35 +824,40 @@ class VideoOverlaySoC(BaseSoC):
         )
 
         # analyzer UART
-        from litex.soc.cores.uart import UARTWishboneBridge
+#        from litex.soc.cores.uart import UARTWishboneBridge
         #            platform.request("serial",1), self.clk_freq, baudrate=3000000)
-        self.submodules.bridge = UARTWishboneBridge(
-            platform.request("serial",1), self.clk_freq, baudrate=115200)
-        self.add_wb_master(self.bridge.wishbone)
+#        self.submodules.bridge = UARTWishboneBridge(
+#            platform.request("serial",1), self.clk_freq, baudrate=115200)
+#        self.add_wb_master(self.bridge.wishbone)
 
         from litescope import LiteScopeAnalyzer
 
         pix_aggregate = Signal(24)
         self.comb += pix_aggregate.eq(Cat(hdmi_out0_rgb.r, hdmi_out0_rgb.g, hdmi_out0_rgb.b))
         analyzer_signals = [
-            self.hdcp.cipher_stream,
-            pix_aggregate,
-            self.hdcp.stream_ready,
-            self.hdcp.de,
+#            self.hdcp.cipher_stream,
+#            pix_aggregate,
+#            self.hdcp.stream_ready,
+#            self.hdcp.de,
             self.hdcp.hsync,
             self.hdcp.vsync,
-            self.hdcp.Aksv14_write,
+#            self.hdcp.Aksv14_write,
             self.hdcp.hpd,
-            self.hdcp.ctl_code,
-            self.hdcp.line_end,
-            self.etherbone.record.last_ip_address,
+#            self.hdcp.ctl_code,
+#            self.hdcp.line_end,
+#            self.etherbone.record.last_ip_address,
         ]
+        self.platform.add_false_path_constraints( # for I2C snoop -> HDCP, and also covers logic analyzer path when configured
+           self.crg.cd_eth.clk,
+           self.hdmi_in0.clocking.cd_pix_o.clk
+        )
+
         """
         analyzer_signals = [
             self.etherbone.record.last_ip_address,
         ]
         """
-        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 256, cd="pix_o", cd_ratio=2)
+        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 128, cd="pix_o", cd_ratio=2)
 
     def do_exit(self, vns):
         self.analyzer.export_csv(vns, "test/analyzer.csv")
