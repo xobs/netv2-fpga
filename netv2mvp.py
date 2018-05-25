@@ -556,7 +556,7 @@ class VideoOverlaySoC(BaseSoC):
         "i2c_snoop",
         "analyzer",
         "phy",
-        "core"
+        "core",
     ]
     csr_map_update(BaseSoC.csr_map, csr_peripherals)
 
@@ -810,7 +810,7 @@ class VideoOverlaySoC(BaseSoC):
 
         self.submodules.phy = phy = LiteEthPHYRMII(platform.request("rmii_eth_clocks"), platform.request("rmii_eth"))
         mac_address = 0x1337320dbabe
-        ip_address="10.0.245.16"
+        ip_address="10.0.11.2"
         self.submodules.core = LiteEthUDPIPCore(self.phy, mac_address, convert_ip(ip_address), int(100e6))
         self.submodules.etherbone = LiteEthEtherbone(self.core.udp, 1234, mode="master")
         self.add_wb_master(self.etherbone.wishbone.bus)
@@ -842,7 +842,13 @@ class VideoOverlaySoC(BaseSoC):
             self.hdcp.hpd,
             self.hdcp.ctl_code,
             self.hdcp.line_end,
+            self.etherbone.record.last_ip_address,
         ]
+        """
+        analyzer_signals = [
+            self.etherbone.record.last_ip_address,
+        ]
+        """
         self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 256, cd="pix_o", cd_ratio=2)
 
     def do_exit(self, vns):
