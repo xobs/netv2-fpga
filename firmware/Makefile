@@ -18,6 +18,8 @@ OBJECTS=isr.o \
 		main.o \
 		bist.o \
 		dump.o \
+                km.o \
+                compute_ksv.o \
 		stdio_wrap.o
 
 CFLAGS += -I.

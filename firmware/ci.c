@@ -23,6 +23,7 @@
 #include "bist.h"
 #include "dump.h"
 #include "edid.h"
+#include "km.h"
 
 int status_enabled;
 extern const struct video_timing video_modes[];
@@ -842,6 +843,8 @@ void ci_service(void)
 		  rectangle_rect_thresh_write((unsigned short) strtoul(get_token(&str), NULL, 0)); 
 		} else if( strcmp(token, "xadc") == 0) {
 		  wprintf( "xadc: %d mC\n", ((unsigned int)xadc_temperature_read() * 503975) / 4096 - 273150 );
+		} else if( strcmp(token, "km") == 0 ) {
+		  derive_km();
 		} else if( strcmp(token, "dumpe" == 0 ) ) {
 		  int i ;
 		  for( i = 0; i < 256; i++ ) {

@@ -129,7 +129,7 @@ _io = [
         Subsignal("scl", Pins("T18"), IOStandard("LVCMOS33")),
         Subsignal("sda", Pins("V18"), IOStandard("LVCMOS33")),
 #        Subsignal("hpd_en", Pins("M22"), IOStandard("LVCMOS33")),  # RX0_FORCEUNPLUG
-#        Subsignal("hpd_notif", Pins("U17"), IOStandard("LVCMOS33")),  # HDMI_HPD_LL_N (note active low)
+        Subsignal("hpd_notif", Pins("U17"), IOStandard("LVCMOS33"), Inverted()),  # HDMI_HPD_LL_N (note active low)
     ),
 
     ("hpd_en", 0, Pins("M22"), IOStandard("LVCMOS33")),
@@ -739,11 +739,12 @@ class VideoOverlaySoC(BaseSoC):
         self.submodules.hdcp = hdcp = HDCP(hdmi_in0_timing)
         self.sync.pix_o += [
             hdcp.Aksv14_write.eq(i2c_snoop.Aksv14_write),
-            hdcp.hpd.eq(hdmi_in0.edid._hpd_notif.status),
+#            hdcp.hpd.eq(hdmi_in0.edid._hpd_notif.status),
+            hdcp.hpd.eq(hdmi_in0_pads.hpd_notif),
             hdcp.An.eq(i2c_snoop.An),
             hdcp.ctl_code.eq(hdmi_in0.decode_terc4.ctl_code),
         ]
-        platform.request("hpd_en").eq(hdcp.hdcp_ena.storage),
+        self.comb += platform.request("hpd_en").eq(hdcp.hpd_ena.storage)
 
         ###### overlay pixel encoders
         self.submodules.encoder_red = encoder_red = ClockDomainsRenamer("pix_o")(Encoder())
@@ -811,12 +812,34 @@ class VideoOverlaySoC(BaseSoC):
         from liteeth.core import LiteEthUDPIPCore
         from liteeth.frontend.etherbone import LiteEthEtherbone
 
-        self.submodules.phy = phy = LiteEthPHYRMII(platform.request("rmii_eth_clocks"), platform.request("rmii_eth"))
-        mac_address = 0x1337320dbabe
-        ip_address="10.0.11.2"
-        self.submodules.core = LiteEthUDPIPCore(self.phy, mac_address, convert_ip(ip_address), int(100e6))
-        self.submodules.etherbone = LiteEthEtherbone(self.core.udp, 1234, mode="master")
-        self.add_wb_master(self.etherbone.wishbone.bus)
+        fast_eth = False  # fast_eth puts etherbone in 100MHz domain; otherwise try to put it in 50MHz domain.
+        # 100 MHz domain works but timing closure is hard
+        # 50 MHz domain should also work but I'm not 100% of the syntax to create the clock domains correctly
+        if fast_eth:
+            self.submodules.phy = phy = LiteEthPHYRMII(platform.request("rmii_eth_clocks"), platform.request("rmii_eth"))
+            mac_address = 0x1337320dbabe
+            ip_address="10.0.11.2"
+            self.submodules.core = LiteEthUDPIPCore(self.phy, mac_address, convert_ip(ip_address), int(100e6))
+            self.submodules.etherbone = LiteEthEtherbone(self.core.udp, 1234, mode="master")
+            self.add_wb_master(self.etherbone.wishbone.bus)
+        else:
+            phy = LiteEthPHYRMII(platform.request("rmii_eth_clocks"),
+                                                       platform.request("rmii_eth"))
+            phy = ClockDomainsRenamer("eth")(phy)
+            mac_address = 0x1337320dbabe
+            ip_address="10.0.11.2"
+            core = LiteEthUDPIPCore(phy, mac_address, convert_ip(ip_address), int(50e6), with_icmp=True)
+            core = ClockDomainsRenamer("eth")(core)
+            self.submodules += phy, core
+
+            etherbone_cd = ClockDomain("etherbone")
+            self.clock_domains += etherbone_cd
+            self.comb += [
+                etherbone_cd.clk.eq(ClockSignal("sys")),
+                etherbone_cd.rst.eq(ResetSignal("sys"))
+            ]
+            self.submodules.etherbone = LiteEthEtherbone(core.udp, 1234, mode="master", cd="etherbone")
+            self.add_wb_master(self.etherbone.wishbone.bus)
 
         self.platform.add_false_path_constraints(
            self.crg.cd_sys.clk,
@@ -833,30 +856,23 @@ class VideoOverlaySoC(BaseSoC):
         from litescope import LiteScopeAnalyzer
 
         pix_aggregate = Signal(24)
-        self.comb += pix_aggregate.eq(Cat(hdmi_out0_rgb.r, hdmi_out0_rgb.g, hdmi_out0_rgb.b))
+        self.comb += pix_aggregate.eq(Cat(self.hdmi_in0.syncpol.r,self.hdmi_in0.syncpol.g,self.hdmi_in0.syncpol.b))
         analyzer_signals = [
-#            self.hdcp.cipher_stream,
-#            pix_aggregate,
-#            self.hdcp.stream_ready,
-#            self.hdcp.de,
+            self.hdcp.cipher_stream,
+            pix_aggregate,
+            self.hdcp.stream_ready,
+            self.hdcp.de,
             self.hdcp.hsync,
             self.hdcp.vsync,
-#            self.hdcp.Aksv14_write,
+            self.hdcp.Aksv14_write,
             self.hdcp.hpd,
-#            self.hdcp.ctl_code,
-#            self.hdcp.line_end,
-#            self.etherbone.record.last_ip_address,
+            self.hdcp.ctl_code,
+            self.hdcp.line_end,
         ]
         self.platform.add_false_path_constraints( # for I2C snoop -> HDCP, and also covers logic analyzer path when configured
            self.crg.cd_eth.clk,
            self.hdmi_in0.clocking.cd_pix_o.clk
         )
-
-        """
-        analyzer_signals = [
-            self.etherbone.record.last_ip_address,
-        ]
-        """
         self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 128, cd="pix_o", cd_ratio=2)
 
     def do_exit(self, vns):
