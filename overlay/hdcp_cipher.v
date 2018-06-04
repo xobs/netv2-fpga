@@ -39,7 +39,8 @@ module hdcp_cipher(
 		   input         hdcpRekeyCipher, // pulsed one cycle to initiate rekey
 		   input         hdcpStreamCipher,// advance cipher state one clock
 		   output [23:0] pr_data,         // pseudorandom data output
-		   output reg    stream_ready     // asserted when stream is ready (after init seq)
+		   output reg    stream_ready,    // asserted when stream is ready (after init seq)
+		   output [12:0] cipher_debug
 		   );
 
    wire 			 lfsr_out;
@@ -64,6 +65,8 @@ module hdcp_cipher(
    reg [(nSTATES-1):0] cstate = {{(nSTATES-1){1'b0}},1'b1};
    reg [(nSTATES-1):0] nstate;
 
+   assign cipher_debug = cstate;
+   
 //   `define SIMULATION 1
 `ifdef SIMULATION
    // synthesis translate_off

@@ -11,8 +11,13 @@ module hdcp_mod (
 		 input wire [55:0]  Km,
 		 input wire 	    Km_valid,
 		 input wire 	    hdcp_ena,
-		 input wire [3:0]   ctl_code,  // control code
+		 input wire [3:0]   ctl_code, // control code
 		 output wire [23:0] cipher_stream,
+		 output wire [17:0] hdcp_debug,
+		 output wire [12:0] cipher_debug,
+		 output wire [3:0]  le_debug,
+		 output wire [7:0]  An_debug,
+		 output wire [7:0]  Km_debug,
 		 output wire 	    stream_ready
 		 );
 
@@ -22,6 +27,10 @@ module hdcp_mod (
    wire        Km_ready;
    reg 	       hdcp_requested;
 
+   // confirm the correct byte ordering
+   assign An_debug = An[63:56];
+   assign Km_debug = Km[55:48];
+   
    wire       vsync_rising;
    reg 	      vsync_v2;
    always @(posedge clk) begin
@@ -86,19 +95,25 @@ module hdcp_mod (
    wire 			hdcp_stream_ena;
 
    reg 				active_line;
-   reg 				hdcp_rekey_2;
+   wire 			hdcp_rekey_2;
    reg 				hdcp_rekey_1;
 
    reg 				hsync_v, hsync_v2;
-   
+
+   assign hdcp_debug = HDCP_cstate;
    assign hdcp_is_ready = (HDCP_cstate == HDCP_READY);
-   
+
+   reg 				le_pipe;
+   assign le_debug = {hdcp_rekey_2, hdcp_rekey_1, le_pipe, line_end};
+
+   // advance hdcp_rekey_2 a cycle to meet the 58 cycle limit
+   assign hdcp_rekey_2 = hdcp_rekey || (le_pipe && line_end); // split le comp across pipe stages
    // compute active_line. This tells you if the last line had active data
    // in it or not. Reset the computation on falling edge of hsync
    always @ (posedge clk) begin
       if( rst == 1'b1 ) begin
 	 active_line <= 1'b0;
-	 hdcp_rekey_2 <= 1'b0;
+//	 hdcp_rekey_2 <= 1'b0;
 	 hdcp_rekey_1 <= 1'b0;
 	 hsync_v <= 1'b0;
 	 hsync_v2 <= 1'b0;
@@ -106,10 +121,14 @@ module hdcp_mod (
 	 hsync_v <= hsync;
 	 hsync_v2 <= hsync_v;
 	 
-	 hdcp_rekey_2 <= hdcp_rekey_1;
-	 hdcp_rekey_1 <= hdcp_rekey || 
-			 (line_end && (HDCP_cstate == HDCP_READY) &&
-			  de);
+//	 hdcp_rekey_2 <= hdcp_rekey_1;
+//	 hdcp_rekey_1 <= hdcp_rekey || 
+//			 (line_end && (HDCP_cstate == HDCP_READY) &&
+//			  de);
+//	 hdcp_rekey_2 <= hdcp_rekey_1 || (le_pipe && line_end); // split le comp across pipe stages
+	 le_pipe <= ((HDCP_cstate == HDCP_READY) && de);
+	 hdcp_rekey_1 <= hdcp_rekey;
+	 
 	 if( de ) begin
 	    active_line <= 1'b1;
 	 end else if( !hsync_v & hsync_v2 ) begin // hsync falling
@@ -390,6 +409,7 @@ module hdcp_mod (
 		.hdcpRekeyCipher(hdcp_rekey_2),
 		.hdcpStreamCipher(hdcp_ena && (HDCP_cstate == HDCP_READY)),
 		.pr_data(cipher_stream),
-		.stream_ready(stream_ready)
+		.stream_ready(stream_ready),
+		.cipher_debug(cipher_debug)
 		);
 endmodule // hdcp_mod

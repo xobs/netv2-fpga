@@ -375,11 +375,12 @@ class BaseSoC(SoCSDRAM):
     def __init__(self, platform, **kwargs):
         clk_freq = int(100e6)
         SoCSDRAM.__init__(self, platform, clk_freq,
-            integrated_rom_size=0x6000,
+            integrated_rom_size=0x5000,
             integrated_sram_size=0x4000,
             #shadow_base=0x00000000,
             ident="NeTV2 LiteX Base SoC",
             reserve_nmi_interrupt=False,
+            cpu_type="vexriscv",
             **kwargs)
 
         self.submodules.crg = CRG(platform)
@@ -442,20 +443,30 @@ class HDCP(Module, AutoCSR):
         self.de = timing_stream.de
         self.hsync = timing_stream.hsync
         self.vsync = timing_stream.vsync
-        self.line_end = timing_stream.de  # this may need some additional adjustment
+        de_r = Signal()
+        line_end = Signal()
+        self.sync.pix_o += de_r.eq(timing_stream.de)
+        self.comb += line_end.eq(~self.de & de_r) # falling edge detector
+        self.line_end = line_end
 
         self.hpd = Signal()
+        self.hdcp_ena = Signal()
         self.Aksv14_write = Signal()
         self.ctl_code = Signal(4)
         self.An = Signal(64)
 
         self.Km = CSRStorage(56)
         self.Km_valid = CSRStorage()
-        self.hdcp_ena = CSRStorage()
         self.hpd_ena = CSRStorage()
 
         self.cipher_stream = Signal(24)
         self.stream_ready = Signal()
+        self.hdcp_debug = Signal(18)
+        self.cipher_debug = Signal(13)
+        self.le_debug = Signal(4)
+
+        self.An_debug = Signal(8)
+        self.Km_debug = Signal(8)
 
         self.specials += [
             Instance("hdcp_mod",
@@ -471,8 +482,13 @@ class HDCP(Module, AutoCSR):
                      i_An = self.An,
                      i_Km = self.Km.storage,
                      i_Km_valid = self.Km_valid.storage,
-                     i_hdcp_ena = self.hdcp_ena.storage,
+                     i_hdcp_ena = self.hdcp_ena,
                      o_cipher_stream = self.cipher_stream,
+                     o_hdcp_debug = self.hdcp_debug,
+                     o_cipher_debug = self.cipher_debug,
+                     o_le_debug = self.le_debug,
+                     o_An_debug = self.An_debug,
+                     o_Km_debug = self.Km_debug,
                      o_stream_ready = self.stream_ready,
                      )
         ]
@@ -510,7 +526,7 @@ class RectOpening(Module, AutoCSR):
 
             If(in0_vsync & ~in0_vsync_r,
                vcounter.eq(0)
-               ).Elif(in0_hsync & ~ in0_hsync_r,
+               ).Elif(in0_de & ~in0_de_r,
                       vcounter.eq(vcounter + 1)
                       ),
             If(in0_de & ~in0_de_r,
@@ -523,6 +539,11 @@ class RectOpening(Module, AutoCSR):
         #        self.comb += rect_on.eq(((hcounter_pix_o > 900) & (hcounter_pix_o < 910) & (vcounter_pix_o > 300) & (vcounter_pix_o < 310))  == 1)
         self.comb += self.rect_on.eq(((hcounter > self.hrect_start.storage) & (hcounter < self.hrect_end.storage) &
                                       (vcounter > self.vrect_start.storage) & (vcounter < self.vrect_end.storage))  == 1)
+
+        self.debugfoo = Signal()
+        self.comb += self.debugfoo.eq((hcounter > 590) & (hcounter < 690))
+
+
 
 rgb_layout = [
     ("r", 8),
@@ -670,16 +691,16 @@ class VideoOverlaySoC(BaseSoC):
         self.platform.add_platform_command("set_clock_groups -group [get_clocks -include_generated_clocks -of [get_nets sys_clk]] -group [get_clocks -include_generated_clocks -of [get_nets hdmi_in0_clk_p]] -asynchronous")
         self.platform.add_platform_command("set_clock_groups -group [get_clocks -include_generated_clocks -of [get_nets sys_clk]] -group [get_clocks -include_generated_clocks -of [get_nets hdmi_in1_clk_p]] -asynchronous")
 
-        # make sure derived clocks get named correctly
-        self.platform.add_platform_command("create_clock_generated_clock -name hdmi_in0_pix_clk [get_pins MMCME2_ADV/CLKOUT0]")
-        self.platform.add_platform_command("create_clock_generated_clock -name hdmi_in0_pix1p25x_clk [get_pins MMCME2_ADV/CLKOUT1]")
-        self.platform.add_platform_command("create_clock_generated_clock -name hdmi_in0_pix5x_clk [get_pins MMCME2_ADV/CLKOUT2]")
-        self.platform.add_platform_command("create_clock_generated_clock -name pix_o_clk [get_pins PLLE2_ADV/CLKOUT0]")
-        self.platform.add_platform_command("create_clock_generated_clock -name pix5x_o_clk [get_pins PLLE2_ADV/CLKOUT2]")
-
-        self.platform.add_platform_command("create_clock_generated_clock -name hdmi_in1_pix_clk [get_pins MMCME2_ADV_1/CLKOUT0]")
-        self.platform.add_platform_command("create_clock_generated_clock -name hdmi_in1_pix1p25x_clk [get_pins MMCME2_ADV_1/CLKOUT1]")
-        self.platform.add_platform_command("create_clock_generated_clock -name hdmi_in1_pix5x_clk [get_pins MMCME2_ADV_1/CLKOUT2]")
+        # make sure derived clocks get named correctly; I think this is now being done right without these args
+        # self.platform.add_platform_command("create_generated_clock -name hdmi_in0_pix_clk [get_pins MMCME2_ADV/CLKOUT0]")
+        # self.platform.add_platform_command("create_generated_clock -name hdmi_in0_pix1p25x_clk [get_pins MMCME2_ADV/CLKOUT1]")
+        # self.platform.add_platform_command("create_generated_clock -name hdmi_in0_pix5x_clk [get_pins MMCME2_ADV/CLKOUT2]")
+        # self.platform.add_platform_command("create_generated_clock -name pix_o_clk [get_pins PLLE2_ADV/CLKOUT0]")
+        # self.platform.add_platform_command("create_generated_clock -name pix5x_o_clk [get_pins PLLE2_ADV/CLKOUT2]")
+        #
+        # self.platform.add_platform_command("create_generated_clock -name hdmi_in1_pix_clk [get_pins MMCME2_ADV_1/CLKOUT0]")
+        # self.platform.add_platform_command("create_generated_clock -name hdmi_in1_pix1p25x_clk [get_pins MMCME2_ADV_1/CLKOUT1]")
+        # self.platform.add_platform_command("create_generated_clock -name hdmi_in1_pix5x_clk [get_pins MMCME2_ADV_1/CLKOUT2]")
 
         # don't time the high-fanout reset paths
         self.platform.add_platform_command("set_false_path -through [get_nets hdmi_in1_pix_rst]")
@@ -740,6 +761,7 @@ class VideoOverlaySoC(BaseSoC):
         self.sync.pix_o += [
             hdcp.Aksv14_write.eq(i2c_snoop.Aksv14_write),
 #            hdcp.hpd.eq(hdmi_in0.edid._hpd_notif.status),
+            hdcp.hdcp_ena.eq(hdmi_in0.decode_terc4.encrypting_video | hdmi_in0.decode_terc4.encrypting_data),
             hdcp.hpd.eq(hdmi_in0_pads.hpd_notif),
             hdcp.An.eq(i2c_snoop.An),
             hdcp.ctl_code.eq(hdmi_in0.decode_terc4.ctl_code),
@@ -751,12 +773,16 @@ class VideoOverlaySoC(BaseSoC):
         self.submodules.encoder_grn = encoder_grn = ClockDomainsRenamer("pix_o")(Encoder())
         self.submodules.encoder_blu = encoder_blu = ClockDomainsRenamer("pix_o")(Encoder())
 
+        debugbar = Signal()
         self.comb += [
-            If(hdcp.hdcp_ena.storage,
+            If(hdcp.Km_valid.storage & debugbar,  # this is a proxy for HDCP being initialized
                encoder_red.d.eq(hdmi_out0_rgb.r ^ hdcp.cipher_stream[16:]), # 23:16
                encoder_grn.d.eq(hdmi_out0_rgb.g ^ hdcp.cipher_stream[8:16]),  # 15:8
-               encoder_blu.d.eq(hdmi_out0_rgb.b ^ hdcp.cipher_stream[0:8]),  # 7:0
-            ).Else(
+               encoder_blu.d.eq( (hdmi_out0_rgb.b ^ hdcp.cipher_stream[0:8])),  # 7:0
+#               encoder_red.d.eq(hdcp.cipher_stream[16:]), # 23:16
+#               encoder_grn.d.eq(hdcp.cipher_stream[8:16]),  # 15:8
+#               encoder_blu.d.eq(hdcp.cipher_stream[0:8]),  # 7:0
+               ).Else(
                 encoder_red.d.eq(hdmi_out0_rgb.r),
                 encoder_grn.d.eq(hdmi_out0_rgb.g),
                 encoder_blu.d.eq(hdmi_out0_rgb.b),
@@ -775,10 +801,31 @@ class VideoOverlaySoC(BaseSoC):
         c0_pix_o = Signal(10)
         c1_pix_o = Signal(10)
         c2_pix_o = Signal(10)
+        c0 = Signal(10)
+        c1 = Signal(10)
+        c2 = Signal(10)
+        self.comb += [
+            c0.eq(self.hdmi_in0.syncpol.c0),
+            c1.eq(self.hdmi_in0.syncpol.c1),
+            c2.eq(self.hdmi_in0.syncpol.c2),
+        ]
+        for i in range(5): # either 5 or 6; 5 if the first pixel is encrypted by the idle cipher; 6 if the cipher has to be pumped before encryption
+            c0_next = Signal(10)
+            c1_next = Signal(10)
+            c2_next = Signal(10)
+            self.sync.pix_o += [  # extra delay to absorb cross-domain jitter & routing
+                c0_next.eq(c0),
+                c1_next.eq(c1),
+                c2_next.eq(c2),
+            ]
+            c0 = c0_next
+            c1 = c1_next
+            c2 = c2_next
+
         self.sync.pix_o += [  # extra delay to absorb cross-domain jitter & routing
-            c0_pix_o.eq(self.hdmi_in0.syncpol.c0),
-            c1_pix_o.eq(self.hdmi_in0.syncpol.c1),
-            c2_pix_o.eq(self.hdmi_in0.syncpol.c2)
+            c0_pix_o.eq(c0_next),
+            c1_pix_o.eq(c1_next),
+            c2_pix_o.eq(c2_next)
         ]
 
         rect_on = Signal()
@@ -787,6 +834,7 @@ class VideoOverlaySoC(BaseSoC):
         self.submodules.rectangle = rectangle = ClockDomainsRenamer("pix_o")( RectOpening(hdmi_in0_timing) )
         self.comb += rect_on.eq(rectangle.rect_on)
         self.comb += rect_thresh.eq(rectangle.rect_thresh.storage)
+        self.comb += debugbar.eq(rectangle.debugfoo) # used up above
 
         self.sync.pix_o += [
 #            If(rect_on & (hdmi_out0_rgb_d.r >= 128) & (hdmi_out0_rgb_d.g >= 128) & (hdmi_out0_rgb_d.b >= 128),
@@ -804,7 +852,7 @@ class VideoOverlaySoC(BaseSoC):
 
         self.comb += platform.request("fpga_led2", 0).eq(self.hdmi_in0.clocking.locked)  # RX0 green
         self.comb += platform.request("fpga_led3", 0).eq(0)  # RX0 red
-        self.comb += platform.request("fpga_led4", 0).eq(0)  # OV0 red
+#        self.comb += platform.request("fpga_led4", 0).eq(0)  # OV0 red
         self.comb += platform.request("fpga_led5", 0).eq(self.hdmi_in1.clocking.locked)  # OV0 green
 
         # analyzer ethernet
@@ -856,11 +904,37 @@ class VideoOverlaySoC(BaseSoC):
         from litescope import LiteScopeAnalyzer
 
         pix_aggregate = Signal(24)
-        self.comb += pix_aggregate.eq(Cat(self.hdmi_in0.syncpol.r,self.hdmi_in0.syncpol.g,self.hdmi_in0.syncpol.b))
+        t4d_aggregate = Signal(12)
+        self.comb += pix_aggregate.eq(Cat(self.hdmi_in0.syncpol.b,self.hdmi_in0.syncpol.g,self.hdmi_in0.syncpol.r))
+        self.comb += t4d_aggregate.eq(Cat(self.hdmi_in0.decode_terc4.data0_dect4.decval.d,
+                                          self.hdmi_in0.decode_terc4.data1_dect4.decval.d,
+                                          self.hdmi_in0.decode_terc4.data2_dect4.decval.d))
+        t4d_crypto = Signal(12)
+        self.comb += t4d_crypto.eq(Cat(0,0,self.hdcp.cipher_stream[2],0,self.hdcp.cipher_stream[8:12],self.hdcp.cipher_stream[16:20]))
+        main_raw = Signal(30)
+        self.comb += main_raw.eq(Cat(c0_pix_o,c1_pix_o,c2_pix_o))
+        overlay_raw = Signal(30)
+        self.comb += overlay_raw.eq(Cat(encoder_blu.out,encoder_grn.out,encoder_red.out))
+
+        sanity = Signal(8)
+        self.sync.pix_o += [
+            sanity.eq(sanity + 1)
+        ]
         analyzer_signals = [
+#            main_raw,
+#            overlay_raw,
+#            self.hdcp.hdcp_debug,
+#            self.hdcp.le_debug,
+#            self.hdcp.cipher_debug,
+            rect_on,
+            rectangle.hcounter,
+            rectangle.vcounter,
             self.hdcp.cipher_stream,
             pix_aggregate,
             self.hdcp.stream_ready,
+            self.hdcp.hdcp_ena,
+            hdmi_in0.decode_terc4.encrypting_video,
+            hdmi_in0.decode_terc4.encrypting_data,
             self.hdcp.de,
             self.hdcp.hsync,
             self.hdcp.vsync,
@@ -868,12 +942,23 @@ class VideoOverlaySoC(BaseSoC):
             self.hdcp.hpd,
             self.hdcp.ctl_code,
             self.hdcp.line_end,
+            hdcp.Km_valid.storage,
+            t4d_aggregate,
+#            self.hdcp.Km_debug,
+            sanity
         ]
         self.platform.add_false_path_constraints( # for I2C snoop -> HDCP, and also covers logic analyzer path when configured
            self.crg.cd_eth.clk,
            self.hdmi_in0.clocking.cd_pix_o.clk
         )
-        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 128, cd="pix_o", cd_ratio=2)
+#        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 128, cd="pix_o", cd_ratio=1, edges=True, hitcountbits=16, triggers=2)
+        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 128, cd="pix_o")
+
+#        self.comb += [
+#            hitcount1.eq(self.analyzer.frontend.trigger.hit_counter),
+#            hitcount2.eq(self.analyzer.frontend.trigger2.hit_counter)
+#        ]
+        self.sync += platform.request("fpga_led4", 0).eq(self.analyzer.storage.sink.hit)  # OV0 red
 
     def do_exit(self, vns):
         self.analyzer.export_csv(vns, "test/analyzer.csv")

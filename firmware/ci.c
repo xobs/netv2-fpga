@@ -794,9 +794,14 @@ void ci_service(void)
 		} else if(strcmp(token, "rect") == 0 ) {
 		  wprintf("enabling video_out0 writing\r\n");
 		  hdmi_core_out0_initiator_enable_write(0);
-		  
-		  const struct video_timing *m = &video_modes[12];
+
+#if 0		  // 1 for 1080, 0 for 720
+		  const struct video_timing *m = &video_modes[12]; // change to 12 for 1080p, 9 for 720p
 		  m = &video_modes[12];
+#else
+		  const struct video_timing *m = &video_modes[9];
+		  m = &video_modes[9];
+#endif
 		  hdmi_core_out0_initiator_base_write(hdmi_in1_framebuffer_base(hdmi_in1_fb_index));
 		  
 		  hdmi_core_out0_initiator_hres_write(m->h_active);
@@ -810,11 +815,19 @@ void ci_service(void)
 		  
 		  hdmi_core_out0_initiator_length_write(m->h_active*m->v_active*4);
 
+#if 0		  
 		  rectangle_hrect_start_write(1);
 		  rectangle_hrect_end_write(1915);
 		  rectangle_vrect_start_write(1);
 		  rectangle_vrect_end_write(1070);
 		  rectangle_rect_thresh_write(128); // "reasonable" default
+#else
+		  rectangle_hrect_start_write(1);
+		  rectangle_hrect_end_write(1278);
+		  rectangle_vrect_start_write(10);
+		  rectangle_vrect_end_write(700);
+		  rectangle_rect_thresh_write(128); // "reasonable" default
+#endif
 
 		  wprintf("out hres %d, hscan %d\r\n", hdmi_core_out0_initiator_hres_read(), hdmi_core_out0_initiator_hscan_read());
 		  wprintf("out vres %d, vscan %d\r\n", hdmi_core_out0_initiator_vres_read(), hdmi_core_out0_initiator_vscan_read());
