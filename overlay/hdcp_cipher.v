@@ -347,16 +347,31 @@ module hdcp_cipher(
 	      load_56 <=#1 1'b0;
 	   end
 	   STREAM: begin
-	      statecnt <=#1 0;
-	      rekey <=#1 1'b0;
-	      load_block <=#1 1'b0;
-	      advance_lfsr <=#1 hdcpStreamCipher;
-	      advance_block <=#1 hdcpStreamCipher;
-	      load_ks <=#1 1'b0;
-	      auth_mode <=#1 authentication;
-	      load_lfsr <=#1 1'b0;
-	      stream_ready <=#1 1'b1;
-	      load_56 <=#1 1'b0;
+	      if( !hdcpBlockCipher_init && hdcpRekeyCipher ) begin
+		 // start the rekey immediately to meet timing requirements (copy of REKEY state here)
+		 statecnt <=#1 statecnt + 1;
+		 rekey <=#1 1'b1;
+		 load_block <=#1 1'b0;
+		 advance_lfsr <=#1 1'b1;
+		 advance_block <=#1 1'b1;
+		 load_ks <=#1 1'b0;
+		 auth_mode <=#1 auth_mode;
+		 load_lfsr <=#1 1'b0;
+		 stream_ready <=#1 1'b0;
+		 load_56 <=#1 1'b0;
+	      end else begin // if ( !hdcpBlockCipher_init && hdcpRekeyCipher )
+		 // default stream state
+		 statecnt <=#1 0;
+		 rekey <=#1 1'b0;
+		 load_block <=#1 1'b0;
+		 advance_lfsr <=#1 hdcpStreamCipher;
+		 advance_block <=#1 hdcpStreamCipher;
+		 load_ks <=#1 1'b0;
+		 auth_mode <=#1 authentication;
+		 load_lfsr <=#1 1'b0;
+		 stream_ready <=#1 1'b1;
+		 load_56 <=#1 1'b0;
+	      end
 	   end
 	   REKEY: begin
 	      statecnt <=#1 statecnt + 1;
