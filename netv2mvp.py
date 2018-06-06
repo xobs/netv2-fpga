@@ -465,12 +465,12 @@ class HDCP(Module, AutoCSR):
 
         self.cipher_stream = Signal(24)
         self.stream_ready = Signal()
-        self.hdcp_debug = Signal(18)
-        self.cipher_debug = Signal(13)
-        self.le_debug = Signal(4)
+#        self.hdcp_debug = Signal(18)
+#        self.cipher_debug = Signal(13)
+#        self.le_debug = Signal(4)
 
-        self.An_debug = Signal(8)
-        self.Km_debug = Signal(8)
+#        self.An_debug = Signal(8)
+#        self.Km_debug = Signal(8)
 
         self.specials += [
             Instance("hdcp_mod",
@@ -488,11 +488,11 @@ class HDCP(Module, AutoCSR):
                      i_Km_valid = self.Km_valid.storage,
                      i_hdcp_ena = self.hdcp_ena,
                      o_cipher_stream = self.cipher_stream,
-                     o_hdcp_debug = self.hdcp_debug,
-                     o_cipher_debug = self.cipher_debug,
-                     o_le_debug = self.le_debug,
-                     o_An_debug = self.An_debug,
-                     o_Km_debug = self.Km_debug,
+#                     o_hdcp_debug = self.hdcp_debug,
+#                     o_cipher_debug = self.cipher_debug,
+#                     o_le_debug = self.le_debug,
+#                     o_An_debug = self.An_debug,
+#                     o_Km_debug = self.Km_debug,
                      o_stream_ready = self.stream_ready,
                      )
         ]
@@ -922,16 +922,12 @@ class VideoOverlaySoC(BaseSoC):
         overlay_raw = Signal(30)
         self.comb += overlay_raw.eq(Cat(encoder_blu.out,encoder_grn.out,encoder_red.out))
 
-        sanity = Signal(8)
-        self.sync.pix_o += [
-            sanity.eq(sanity + 1)
-        ]
         analyzer_signals = [
 #            main_raw,
 #            overlay_raw,
-            self.hdcp.hdcp_debug,
-            self.hdcp.le_debug,
-            self.hdcp.cipher_debug,
+#            self.hdcp.hdcp_debug,
+#            self.hdcp.le_debug,
+#            self.hdcp.cipher_debug,
 #            rect_on,
             rectangle.hcounter,
             rectangle.vcounter,
@@ -951,7 +947,7 @@ class VideoOverlaySoC(BaseSoC):
             hdcp.Km_valid.storage,
 #            t4d_aggregate,
 #            self.hdcp.Km_debug,
-            self.hdcp.An_debug,
+#            self.hdcp.An_debug,
 #            sanity
         ]
         self.platform.add_false_path_constraints( # for I2C snoop -> HDCP, and also covers logic analyzer path when configured

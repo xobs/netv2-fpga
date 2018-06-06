@@ -1,3 +1,44 @@
+/*
+ Integration notes.
+
+ 0x74 DDC traffic format (from i2c_snoop.v):
+     LSB  Bksv  MSB
+ 00: ae 80 12 db fa 00 00 00 00 00 00 00 00 00 00 00
+ 10: ed 90 b4 5c 0f 00 00 00 46 84 e5 6c 78 b6 53 f5
+     lSB  Aksv  MSB          LSB     An          MSB
+  
+1. Km is computed by the host, based on observations of Aksv/Bksv.
+   Note that Km is different for every source/sink combo but stays
+   constant for a given pairing. Note endianness of records.
+ 
+2. An (session key) is recovered on a per-session basis.
+ 
+3. When the 14th byte of i2c_snoop (MSB of Aksv) is written, cipher
+   initialization is triggered. This is the Aksv14_write signal.
+   Consider refactor to pass on as an interrupt to SoC to compute
+   Km dynamically, to avoid HPD re-flash/re-sync. Computations
+   must complete within 100ms.
+ 
+Things to check on integration:
+  - line_end pulses on the last pixel (not after the last pixel)
+    This means the line_end pulse can't be a simple de & ~de computation.
+    Options include anticipating de length based on video mode, or digging
+    the de signal out from an earlier pipeline stage.
+ 
+  - hdcp_ena will come from the TERC4/control signal state machine
+    and needs to be asserted whenever TERC4 islands occur, or when video
+    data is present (this comes from looking at the guardbands & CTL signals)
+ 
+  - ctl_code is the 4-bit control code that rides on the r/g channels (b has
+    hsync/vsync). Necessary for EESS detection.
+ 
+  - de, hsync, vsync are the video timing signals
+ 
+  - Km_valid is status feedback from the CPU to indicate when the Km has
+    been computed by the host and is in fact valid.
+ 
+ */
+
 module hdcp_mod (
 		 input wire 	    clk, // pixclk
 		 input wire 	    rst,
@@ -13,11 +54,10 @@ module hdcp_mod (
 		 input wire 	    hdcp_ena,
 		 input wire [3:0]   ctl_code, // control code
 		 output wire [23:0] cipher_stream,
-		 output wire [17:0] hdcp_debug,
-		 output wire [12:0] cipher_debug,
-		 output wire [3:0]  le_debug,
-		 output wire [7:0]  An_debug,
-		 output wire [7:0]  Km_debug,
+//		 output wire [17:0] hdcp_debug,
+//		 output wire [12:0] cipher_debug,
+//		 output wire [7:0]  An_debug,
+//		 output wire [7:0]  Km_debug,
 		 output wire 	    stream_ready
 		 );
 
@@ -28,8 +68,8 @@ module hdcp_mod (
    reg 	       hdcp_requested;
 
    // confirm the correct byte ordering
-   assign An_debug = An[63:56];
-   assign Km_debug = Km[55:48];
+//   assign An_debug = An[63:56];
+//   assign Km_debug = Km[55:48];
    
    wire       vsync_rising;
    reg 	      vsync_v2;
@@ -80,54 +120,39 @@ module hdcp_mod (
    parameter HDCP_VSYNC_WAIT  = 18'b1 << 12; // 1000
    parameter HDCP_READY       = 18'b1 << 13; // 2000
    parameter HDCP_REKEY       = 18'b1 << 14; // 4000
-   parameter HDCP_REKEY_PULSE = 18'b1 << 15; // 8000
-   parameter HDCP_REKEY_WAIT  = 18'b1 << 16; // 10000
-   parameter HDCP_WAIT_KMRDY  = 18'b1 << 17; // 20000
+   parameter HDCP_REKEY_WAIT  = 18'b1 << 15; // 8000
+   parameter HDCP_WAIT_KMRDY  = 18'b1 << 16; // 10000
+//   parameter HDCP_REKEY_PULSE = 18'b1 << 17; // 20000 
 
-   parameter HDCP_nSTATES = 18;
+   parameter HDCP_nSTATES = 17;
    
    reg [(HDCP_nSTATES-1):0]     HDCP_cstate = {{(HDCP_nSTATES-1){1'b0}}, 1'b1};
    reg [(HDCP_nSTATES-1):0]     HDCP_nstate;
 
    reg 				auth_mode;
    reg 				hdcp_init;
-   reg 				hdcp_rekey;
    wire 			hdcp_stream_ena;
 
    reg 				active_line;
-   wire 			hdcp_rekey_2;
-   reg 				hdcp_rekey_1;
-
+   wire 			hdcp_rekey;
+   
    reg 				hsync_v, hsync_v2;
 
-   assign hdcp_debug = HDCP_cstate;
+//   assign hdcp_debug = HDCP_cstate;
    assign hdcp_is_ready = (HDCP_cstate == HDCP_READY);
 
    reg 				le_pipe;
-   assign le_debug = {hdcp_rekey_2, hdcp_rekey_1, le_pipe, line_end};
 
-   // advance hdcp_rekey_2 a cycle to meet the 58 cycle limit
-   assign hdcp_rekey_2 = hdcp_rekey || (le_pipe && line_end); // split le comp across pipe stages
-   // compute active_line. This tells you if the last line had active data
-   // in it or not. Reset the computation on falling edge of hsync
+   assign hdcp_rekey = line_end;
+
    always @ (posedge clk) begin
       if( rst == 1'b1 ) begin
 	 active_line <= 1'b0;
-//	 hdcp_rekey_2 <= 1'b0;
-	 hdcp_rekey_1 <= 1'b0;
 	 hsync_v <= 1'b0;
 	 hsync_v2 <= 1'b0;
       end else begin
 	 hsync_v <= hsync;
 	 hsync_v2 <= hsync_v;
-	 
-//	 hdcp_rekey_2 <= hdcp_rekey_1;
-//	 hdcp_rekey_1 <= hdcp_rekey || 
-//			 (line_end && (HDCP_cstate == HDCP_READY) &&
-//			  de);
-//	 hdcp_rekey_2 <= hdcp_rekey_1 || (le_pipe && line_end); // split le comp across pipe stages
-	 le_pipe <= ((HDCP_cstate == HDCP_READY) && de);
-	 hdcp_rekey_1 <= hdcp_rekey;
 	 
 	 if( de ) begin
 	    active_line <= 1'b1;
@@ -229,10 +254,6 @@ module hdcp_mod (
 
 	// our primary cipher state
 	HDCP_READY: begin
-//	   HDCP_nstate = (!rx0_de & de) ? HDCP_REKEY_PULSE :
-	   // i've now got a signal banging rekey outside this state machine
-	   // it's unclean, but necessary to get rekey to happen early enough
-	   // to meet hdcp spec requirement for rekey time.
 	   // Core assumption: the only way stream becomes un-ready during
 	   // HDCP_READY is due to the external rekey event. vsync_rising
 	   // will never result in this triggering because it itself must
@@ -244,8 +265,6 @@ module hdcp_mod (
 			 HDCP_READY;
 	end
 
-	HDCP_REKEY_PULSE: begin
-	   HDCP_nstate = HDCP_REKEY;
 	end
 	HDCP_REKEY: begin
 	   HDCP_nstate = stream_ready ? HDCP_REKEY : HDCP_REKEY_WAIT;
@@ -263,7 +282,6 @@ module hdcp_mod (
       if( rst | hpd ) begin
 	 auth_mode <=#1 1'b0;
 	 hdcp_init <=#1 1'b0;
-	 hdcp_rekey <=#1 1'b0;
 	 hdcp_requested <=#1 1'b0;
 	 
 	 Km_rdy0 <= 1'b0;
@@ -278,119 +296,93 @@ module hdcp_mod (
 	   HDCP_UNPLUG: begin
 	      auth_mode <=#1 1'b0;
 	      hdcp_init <=#1 1'b0;
-	      hdcp_rekey <=#1 1'b0;
 	      hdcp_requested <=#1 1'b0;
 	   end
 	   HDCP_WAIT_AKSV: begin
 	      auth_mode <=#1 1'b0;
 	      hdcp_init <=#1 1'b0;
-	      hdcp_rekey <=#1 1'b0;
 	      hdcp_requested <=#1 1'b0;
 	   end
 	   
 	   HDCP_WAIT_KMRDY: begin
 	      auth_mode <=#1 1'b0;
 	      hdcp_init <=#1 1'b0;
-	      hdcp_rekey <=#1 1'b0;
 	      hdcp_requested <=#1 1'b0;
 	   end
 	   
 	   HDCP_AUTH_PULSE: begin
 	      auth_mode <=#1 1'b1;
 	      hdcp_init <=#1 1'b1; // pulse just one cycle
-	      hdcp_rekey <=#1 1'b0;
 	      hdcp_requested <=#1 1'b0;
 	   end
 	   HDCP_AUTH: begin
 	      auth_mode <=#1 1'b0;
 	      hdcp_init <=#1 1'b0;
-	      hdcp_rekey <=#1 1'b0;
 	      hdcp_requested <=#1 1'b0;
 	   end
 	   HDCP_AUTH_WAIT: begin
 	      auth_mode <=#1 1'b0;
 	      hdcp_init <=#1 1'b0;
-	      hdcp_rekey <=#1 1'b0;
 	      hdcp_requested <=#1 1'b0;
 	   end
 
 	   HDCP_AUTH_VSYNC_PULSE: begin
 	      auth_mode <=#1 1'b0;
 	      hdcp_init <=#1 1'b1;  // pulse init, but not with auth_mode
-	      hdcp_rekey <=#1 1'b0;
 	      hdcp_requested <=#1 1'b0;
 	   end
 	   HDCP_AUTH_VSYNC: begin
 	      auth_mode <=#1 1'b0;
 	      hdcp_init <=#1 1'b0;
-	      hdcp_rekey <=#1 1'b0;
 	      hdcp_requested <=#1 1'b0;
 	   end
 	   HDCP_AUTH_VSYNC_WAIT: begin
 	      auth_mode <=#1 1'b0;
 	      hdcp_init <=#1 1'b0;
-	      hdcp_rekey <=#1 1'b0;
 	      hdcp_requested <=#1 1'b0;
 	   end
 	   
 	   HDCP_WAIT_1001: begin
 	      auth_mode <=#1 1'b0;
 	      hdcp_init <=#1 1'b0;
-	      hdcp_rekey <=#1 1'b0;
 	      hdcp_requested <=#1 1'b0;
 	   end
 	   HDCP_WAIT_1001_END: begin
 	      auth_mode <=#1 1'b0;
 	      hdcp_init <=#1 1'b0;
-	      hdcp_rekey <=#1 1'b0;
 	      hdcp_requested <=#1 1'b0;
 	   end
 	   
 	   HDCP_VSYNC_PULSE: begin
 	      auth_mode <=#1 1'b0;
 	      hdcp_init <=#1 1'b1;  // pulse init, but not with auth_mode
-	      hdcp_rekey <=#1 1'b0;
 	      hdcp_requested <=#1 1'b1;
 	   end
 	   HDCP_VSYNC: begin
 	      auth_mode <=#1 1'b0;
 	      hdcp_init <=#1 1'b0;
-	      hdcp_rekey <=#1 1'b0;
 	      hdcp_requested <=#1 1'b1;
 	   end
 	   HDCP_VSYNC_WAIT: begin
 	      auth_mode <=#1 1'b0;
 	      hdcp_init <=#1 1'b0;
-	      hdcp_rekey <=#1 1'b0;
 	      hdcp_requested <=#1 1'b1;
 	   end
 	   
 	   HDCP_READY: begin
 	      auth_mode <=#1 1'b0;
 	      hdcp_init <=#1 1'b0;
-	      hdcp_rekey <=#1 1'b0;
 	      hdcp_requested <=#1 1'b1;
 	   end
 	   
-	   HDCP_REKEY_PULSE: begin
-	      auth_mode <=#1 1'b0;
-	      hdcp_init <=#1 1'b0;
-//	      hdcp_rekey <=#1 1'b1; // pulse rekey
-	      hdcp_rekey <=#1 1'b0; // we're going to do this asychronously to save some cycles
-	      // yes, it means hdcp_rekey gets optimized out
-	      // but structurally this helps me remember what the code was intended to do
-	      hdcp_requested <=#1 1'b1;
-	   end
 	   HDCP_REKEY: begin
 	      auth_mode <=#1 1'b0;
 	      hdcp_init <=#1 1'b0;
-	      hdcp_rekey <=#1 1'b0;
 	      hdcp_requested <=#1 1'b1;
 	   end
 	   HDCP_REKEY_WAIT: begin
 	      auth_mode <=#1 1'b0;
 	      hdcp_init <=#1 1'b0;
-	      hdcp_rekey <=#1 1'b0;
 	      hdcp_requested <=#1 1'b1;
 	   end
 	 endcase // case (HDCP_cstate)
@@ -406,10 +398,10 @@ module hdcp_mod (
 		.An(An),
 		.hdcpBlockCipher_init(hdcp_init),
 		.authentication(auth_mode),
-		.hdcpRekeyCipher(hdcp_rekey_2),
+		.hdcpRekeyCipher(hdcp_rekey),
 		.hdcpStreamCipher(hdcp_ena && (HDCP_cstate == HDCP_READY)),
 		.pr_data(cipher_stream),
-		.stream_ready(stream_ready),
-		.cipher_debug(cipher_debug)
+		.stream_ready(stream_ready)
+//		.cipher_debug(cipher_debug)
 		);
 endmodule // hdcp_mod
