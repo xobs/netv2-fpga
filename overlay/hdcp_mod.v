@@ -265,7 +265,6 @@ module hdcp_mod (
 			 HDCP_READY;
 	end
 
-	end
 	HDCP_REKEY: begin
 	   HDCP_nstate = stream_ready ? HDCP_REKEY : HDCP_REKEY_WAIT;
 	end
