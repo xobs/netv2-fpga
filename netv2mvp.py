@@ -31,6 +31,8 @@ from litex.soc.interconnect.csr import *
 
 from liteeth.common import *
 
+from migen.genlib.cdc import MultiReg
+
 _io = [
     ("clk50", 0, Pins("J19"), IOStandard("LVCMOS33")),
 
@@ -443,11 +445,13 @@ class HDCP(Module, AutoCSR):
         self.de = timing_stream.de
         self.hsync = timing_stream.hsync
         self.vsync = timing_stream.vsync
-        de_r = Signal()
-        line_end = Signal()
-        self.sync.pix_o += de_r.eq(timing_stream.de)
-        self.comb += line_end.eq(~self.de & de_r) # falling edge detector
-        self.line_end = line_end
+
+        #de_r = Signal()
+        #line_end = Signal()
+        #self.sync.pix_o += de_r.eq(timing_stream.de)
+        #self.comb += line_end.eq(~self.de & de_r) # falling edge detector
+        #self.line_end = line_end
+        self.line_end = Signal() # early line end comes from outside this module
 
         self.hpd = Signal()
         self.hdcp_ena = Signal()
@@ -539,9 +543,6 @@ class RectOpening(Module, AutoCSR):
         #        self.comb += rect_on.eq(((hcounter_pix_o > 900) & (hcounter_pix_o < 910) & (vcounter_pix_o > 300) & (vcounter_pix_o < 310))  == 1)
         self.comb += self.rect_on.eq(((hcounter > self.hrect_start.storage) & (hcounter < self.hrect_end.storage) &
                                       (vcounter > self.vrect_start.storage) & (vcounter < self.vrect_end.storage))  == 1)
-
-        self.debugfoo = Signal()
-        self.comb += self.debugfoo.eq((hcounter > 590) & (hcounter < 690))
 
 
 
@@ -651,6 +652,8 @@ class VideoOverlaySoC(BaseSoC):
                 hdmi_in0_timing.valid.eq(0),
             )
         ]
+        early_line_end = Signal()
+        self.comb += early_line_end.eq(hdmi_in0_timing.de & ~self.hdmi_in0.syncpol.de)
 
         ########## hdmi in 1
         hdmi_in1_pads = platform.request("hdmi_in", 1)
@@ -758,8 +761,13 @@ class VideoOverlaySoC(BaseSoC):
 
         self.submodules.i2c_snoop = i2c_snoop = I2Csnoop(hdmi_in0_pads)
         self.submodules.hdcp = hdcp = HDCP(hdmi_in0_timing)
+        self.comb += hdcp.line_end.eq(early_line_end)  # wire up an early line-end signal to meet rekey timing
+        Aksv14 = Signal()
+        Aksv14_r = Signal()
+        self.specials += MultiReg(i2c_snoop.Aksv14_write, Aksv14, odomain="pix_o")
         self.sync.pix_o += [
-            hdcp.Aksv14_write.eq(i2c_snoop.Aksv14_write),
+            Aksv14_r.eq(Aksv14),
+            hdcp.Aksv14_write.eq(Aksv14 & ~Aksv14_r), # should be a rising-edge strobe only
 #            hdcp.hpd.eq(hdmi_in0.edid._hpd_notif.status),
             hdcp.hdcp_ena.eq(hdmi_in0.decode_terc4.encrypting_video | hdmi_in0.decode_terc4.encrypting_data),
             hdcp.hpd.eq(hdmi_in0_pads.hpd_notif),
@@ -773,9 +781,8 @@ class VideoOverlaySoC(BaseSoC):
         self.submodules.encoder_grn = encoder_grn = ClockDomainsRenamer("pix_o")(Encoder())
         self.submodules.encoder_blu = encoder_blu = ClockDomainsRenamer("pix_o")(Encoder())
 
-        debugbar = Signal()
         self.comb += [
-            If(hdcp.Km_valid.storage & debugbar,  # this is a proxy for HDCP being initialized
+            If(hdcp.Km_valid.storage,  # this is a proxy for HDCP being initialized
                encoder_red.d.eq(hdmi_out0_rgb.r ^ hdcp.cipher_stream[16:]), # 23:16
                encoder_grn.d.eq(hdmi_out0_rgb.g ^ hdcp.cipher_stream[8:16]),  # 15:8
                encoder_blu.d.eq( (hdmi_out0_rgb.b ^ hdcp.cipher_stream[0:8])),  # 7:0
@@ -809,7 +816,7 @@ class VideoOverlaySoC(BaseSoC):
             c1.eq(self.hdmi_in0.syncpol.c1),
             c2.eq(self.hdmi_in0.syncpol.c2),
         ]
-        for i in range(5): # either 5 or 6; 5 if the first pixel is encrypted by the idle cipher; 6 if the cipher has to be pumped before encryption
+        for i in range(6): # either 5 or 6; 5 if the first pixel is encrypted by the idle cipher; 6 if the cipher has to be pumped before encryption
             c0_next = Signal(10)
             c1_next = Signal(10)
             c2_next = Signal(10)
@@ -834,7 +841,6 @@ class VideoOverlaySoC(BaseSoC):
         self.submodules.rectangle = rectangle = ClockDomainsRenamer("pix_o")( RectOpening(hdmi_in0_timing) )
         self.comb += rect_on.eq(rectangle.rect_on)
         self.comb += rect_thresh.eq(rectangle.rect_thresh.storage)
-        self.comb += debugbar.eq(rectangle.debugfoo) # used up above
 
         self.sync.pix_o += [
 #            If(rect_on & (hdmi_out0_rgb_d.r >= 128) & (hdmi_out0_rgb_d.g >= 128) & (hdmi_out0_rgb_d.b >= 128),
@@ -923,10 +929,10 @@ class VideoOverlaySoC(BaseSoC):
         analyzer_signals = [
 #            main_raw,
 #            overlay_raw,
-#            self.hdcp.hdcp_debug,
-#            self.hdcp.le_debug,
-#            self.hdcp.cipher_debug,
-            rect_on,
+            self.hdcp.hdcp_debug,
+            self.hdcp.le_debug,
+            self.hdcp.cipher_debug,
+#            rect_on,
             rectangle.hcounter,
             rectangle.vcounter,
             self.hdcp.cipher_stream,
@@ -943,22 +949,24 @@ class VideoOverlaySoC(BaseSoC):
             self.hdcp.ctl_code,
             self.hdcp.line_end,
             hdcp.Km_valid.storage,
-            t4d_aggregate,
+#            t4d_aggregate,
 #            self.hdcp.Km_debug,
-            sanity
+            self.hdcp.An_debug,
+#            sanity
         ]
         self.platform.add_false_path_constraints( # for I2C snoop -> HDCP, and also covers logic analyzer path when configured
            self.crg.cd_eth.clk,
            self.hdmi_in0.clocking.cd_pix_o.clk
         )
 #        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 128, cd="pix_o", cd_ratio=1, edges=True, hitcountbits=16, triggers=2)
-        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 128, cd="pix_o")
+        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 256, cd="pix_o", trigger_depth=16)
 
 #        self.comb += [
 #            hitcount1.eq(self.analyzer.frontend.trigger.hit_counter),
 #            hitcount2.eq(self.analyzer.frontend.trigger2.hit_counter)
 #        ]
-        self.sync += platform.request("fpga_led4", 0).eq(self.analyzer.storage.sink.hit)  # OV0 red
+    #        self.sync += platform.request("fpga_led4", 0).eq(self.analyzer.storage.sink.hit)  # OV0 red
+        self.sync += platform.request("fpga_led4", 0).eq(0)  # OV0 red
 
     def do_exit(self, vns):
         self.analyzer.export_csv(vns, "test/analyzer.csv")

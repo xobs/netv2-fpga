@@ -824,7 +824,7 @@ void ci_service(void)
 #else
 		  rectangle_hrect_start_write(1);
 		  rectangle_hrect_end_write(1278);
-		  rectangle_vrect_start_write(10);
+		  rectangle_vrect_start_write(1);
 		  rectangle_vrect_end_write(700);
 		  rectangle_rect_thresh_write(128); // "reasonable" default
 #endif

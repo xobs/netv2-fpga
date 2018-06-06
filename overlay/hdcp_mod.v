@@ -65,24 +65,24 @@ module hdcp_mod (
    // That's it. So the only question is if vsync "happens" immediately after an authentication.
    // The test vectors would suggest this is the case but I can't find it in the state machine
    // diagrams, so perhaps good to try both options...?
-   parameter HDCP_UNPLUG      = 18'b1 << 0;
-   parameter HDCP_WAIT_AKSV   = 18'b1 << 1;
-   parameter HDCP_AUTH_PULSE  = 18'b1 << 2;
-   parameter HDCP_AUTH        = 18'b1 << 3;
-   parameter HDCP_AUTH_WAIT   = 18'b1 << 4;
-   parameter HDCP_AUTH_VSYNC_PULSE  = 18'b1 << 5;
-   parameter HDCP_AUTH_VSYNC        = 18'b1 << 6;
-   parameter HDCP_AUTH_VSYNC_WAIT   = 18'b1 << 7;
-   parameter HDCP_WAIT_1001   = 18'b1 << 8;
-   parameter HDCP_WAIT_1001_END = 18'b1 << 9;
-   parameter HDCP_VSYNC       = 18'b1 << 10;
-   parameter HDCP_VSYNC_PULSE = 18'b1 << 11;
-   parameter HDCP_VSYNC_WAIT  = 18'b1 << 12;
-   parameter HDCP_READY       = 18'b1 << 13;
-   parameter HDCP_REKEY       = 18'b1 << 14;
-   parameter HDCP_REKEY_PULSE = 18'b1 << 15;
-   parameter HDCP_REKEY_WAIT  = 18'b1 << 16;
-   parameter HDCP_WAIT_KMRDY  = 18'b1 << 17;
+   parameter HDCP_UNPLUG      = 18'b1 << 0;  // 1
+   parameter HDCP_WAIT_AKSV   = 18'b1 << 1;  // 2
+   parameter HDCP_AUTH_PULSE  = 18'b1 << 2;  // 4
+   parameter HDCP_AUTH        = 18'b1 << 3;  // 8
+   parameter HDCP_AUTH_WAIT   = 18'b1 << 4;  // 10
+   parameter HDCP_AUTH_VSYNC_PULSE  = 18'b1 << 5;  // 20
+   parameter HDCP_AUTH_VSYNC        = 18'b1 << 6;  // 40
+   parameter HDCP_AUTH_VSYNC_WAIT   = 18'b1 << 7;  // 80
+   parameter HDCP_WAIT_1001   = 18'b1 << 8;  // 100
+   parameter HDCP_WAIT_1001_END = 18'b1 << 9;  // 200
+   parameter HDCP_VSYNC       = 18'b1 << 10; // 400
+   parameter HDCP_VSYNC_PULSE = 18'b1 << 11; // 800
+   parameter HDCP_VSYNC_WAIT  = 18'b1 << 12; // 1000
+   parameter HDCP_READY       = 18'b1 << 13; // 2000
+   parameter HDCP_REKEY       = 18'b1 << 14; // 4000
+   parameter HDCP_REKEY_PULSE = 18'b1 << 15; // 8000
+   parameter HDCP_REKEY_WAIT  = 18'b1 << 16; // 10000
+   parameter HDCP_WAIT_KMRDY  = 18'b1 << 17; // 20000
 
    parameter HDCP_nSTATES = 18;
    

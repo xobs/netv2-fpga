@@ -50,4 +50,4 @@ SECTIONS
 	} > sram
 }
 
-PROVIDE(_fstack = ORIGIN(sram) + LENGTH(sram) - 4);
+PROVIDE(_fstack = ORIGIN(main_ram) + LENGTH(main_ram) - 4);

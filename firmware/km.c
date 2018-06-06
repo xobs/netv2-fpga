@@ -12,8 +12,8 @@ unsigned char read_hdcp(unsigned char addr) {
   return( i2c_snoop_edid_snoop_dat_read() );
 }
 
-//#define CHECK_KM 0x86a4df6560c88eLL  // panasonic + LG
-#define CHECK_KM 0x225d10cee24175LL  // appleTV + LG
+#define CHECK_KM 0x86a4df6560c88eLL  // panasonic + LG
+//#define CHECK_KM 0x225d10cee24175LL  // appleTV + LG
 #define CHECK 0
 
 void derive_km(void) {
@@ -144,5 +144,6 @@ void derive_km(void) {
     while( !elapsed(&last_event, SYSTEM_CLOCK_FREQUENCY) ) {
       ;
     }
+    wprintf( "Releasing HPD\n" );
     hdcp_hpd_ena_write(0);    
 }

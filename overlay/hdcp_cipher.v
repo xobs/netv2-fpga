@@ -47,19 +47,19 @@ module hdcp_cipher(
    wire [23:0] 			 ostream;
    wire [83:0] 			 Bo_wire;
 
-   parameter INIT =       12'b1 << 0;
-   parameter BLOCK_1 =    12'b1 << 1;
-   parameter BLOCK_2 =    12'b1 << 2;
-   parameter BLOCK_3 =    12'b1 << 3;
-   parameter BLOCK_4 =    12'b1 << 4;
-   parameter BLOCK_5 =    12'b1 << 5;
-   parameter BLOCK_6 =    12'b1 << 6;
-   parameter BLOCK_7 =    12'b1 << 7;
-   parameter BLOCK_8 =    12'b1 << 8;
-   parameter BLOCK_9 =    12'b1 << 9;
-   parameter GET_M   =    12'b1 << 10;
-   parameter STREAM  =    12'b1 << 11;
-   parameter REKEY   =    12'b1 << 12;
+   parameter INIT =       12'b1 << 0;   // 1
+   parameter BLOCK_1 =    12'b1 << 1;   // 2
+   parameter BLOCK_2 =    12'b1 << 2;   // 4
+   parameter BLOCK_3 =    12'b1 << 3;   // 8
+   parameter BLOCK_4 =    12'b1 << 4;   // 10
+   parameter BLOCK_5 =    12'b1 << 5;   // 20
+   parameter BLOCK_6 =    12'b1 << 6;   // 40
+   parameter BLOCK_7 =    12'b1 << 7;   // 80
+   parameter BLOCK_8 =    12'b1 << 8;   // 100
+   parameter BLOCK_9 =    12'b1 << 9;   // 200 
+   parameter GET_M   =    12'b1 << 10;  // 400
+   parameter STREAM  =    12'b1 << 11;  // 800
+   parameter REKEY   =    12'b1 << 12;  // 1000 (optimized to 0)
    parameter nSTATES = 13;
    
    reg [(nSTATES-1):0] cstate = {{(nSTATES-1){1'b0}},1'b1};
