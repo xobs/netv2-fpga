@@ -795,7 +795,7 @@ void ci_service(void)
 		  wprintf("enabling video_out0 writing\r\n");
 		  hdmi_core_out0_initiator_enable_write(0);
 
-#if 0		  // 1 for 1080, 0 for 720
+#if 1		  // 1 for 1080, 0 for 720
 		  const struct video_timing *m = &video_modes[12]; // change to 12 for 1080p, 9 for 720p
 		  m = &video_modes[12];
 #else
@@ -815,10 +815,10 @@ void ci_service(void)
 		  
 		  hdmi_core_out0_initiator_length_write(m->h_active*m->v_active*4);
 
-#if 0		  
-		  rectangle_hrect_start_write(1);
+#if 1		  
+		  rectangle_hrect_start_write(10);
 		  rectangle_hrect_end_write(1915);
-		  rectangle_vrect_start_write(1);
+		  rectangle_vrect_start_write(10);
 		  rectangle_vrect_end_write(1070);
 		  rectangle_rect_thresh_write(128); // "reasonable" default
 #else

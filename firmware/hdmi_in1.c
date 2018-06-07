@@ -17,7 +17,7 @@
 int hdmi_in1_debug;
 int hdmi_in1_fb_index;
 
-#define FRAMEBUFFER_COUNT 4
+#define FRAMEBUFFER_COUNT 2
 #define FRAMEBUFFER_MASK (FRAMEBUFFER_COUNT - 1)
 
 //#define HDMI_IN1_FRAMEBUFFERS_BASE (0x00000000 + 0x100000)
