@@ -17,5 +17,5 @@ for dep in ["litescope", "liteeth", "litevideo", "litedram", "litex", "migen"]:
     python_path.append(script_path + "deps" + os.path.sep + dep)
 os.environ["PYTHONPATH"] = os.pathsep.join(python_path)
 
-#os.system(sys.executable + " " + script_path + os.path.sep + "netv2mvp.py video_overlay")
-os.system(sys.executable + " -mlitex.soc.tools.remote.litex_server -emain")
+os.system(sys.executable + " " + script_path + os.path.sep + "netv2mvp.py video_overlay")
+#os.system(sys.executable + " -mlitex.soc.tools.remote.litex_server -emain")
