@@ -13,9 +13,18 @@ print("Script path: " + script_path)
 os.environ["PYTHONHASHSEED"] = "1"
 
 python_path = []
-for dep in ["litescope", "liteeth", "litevideo", "litedram", "litex", "migen"]:
+for dep in ["litescope", "liteeth", "litevideo", "litedram", "litex", "migen", "pyserial"]:
     python_path.append(script_path + "deps" + os.path.sep + dep)
 os.environ["PYTHONPATH"] = os.pathsep.join(python_path)
 
-os.system(sys.executable + " " + script_path + os.path.sep + "netv2mvp.py video_overlay")
-#os.system(sys.executable + " -mlitex.soc.tools.remote.litex_server -emain")
+# Build the bitstream
+os.execl(sys.executable, sys.executable, script_path + os.path.sep + "netv2mvp.py", "video_overlay")
+
+# Start the litex_server script
+#os.execl(sys.executable, sys.executable, "-mlitex.soc.tools.remote.litex_server", "udp")
+
+# Start litex_term
+#os.execl(sys.executable, sys.executable, "-mlitex.soc.tools.litex_term", "udp")
+
+# Debug environment using bash
+#os.execl("/bin/bash", "bash")
