@@ -20,3 +20,6 @@
 	path = deps/litescope
 	url = https://github.com/bunnie/litescope.git
 	branch = add-trigger-depth
+[submodule "deps/pyserial"]
+	path = deps/pyserial
+	url = https://github.com/pyserial/pyserial.git
