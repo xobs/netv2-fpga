@@ -3,4 +3,6 @@
 *.d
 *.elf
 *.bin
-
+*.swp
+*.swo
+build
