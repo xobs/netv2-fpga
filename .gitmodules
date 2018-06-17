@@ -1,0 +1,22 @@
+[submodule "deps/litex"]
+	path = deps/litex
+	url = https://github.com/bunnie/litex.git
+	branch = bunnie-mods
+[submodule "deps/migen"]
+	path = deps/migen
+	url = https://github.com/bunnie/migen.git
+	branch = improve-gearbox-timing
+[submodule "deps/litedram"]
+	path = deps/litedram
+	url = https://github.com/enjoy-digital/litedram.git
+[submodule "deps/litevideo"]
+	path = deps/litevideo
+	url = https://github.com/bunnie/litevideo.git
+	branch = terc4-data
+[submodule "deps/liteeth"]
+	path = deps/liteeth
+	url = https://github.com/enjoy-digital/liteeth.git
+[submodule "deps/litescope"]
+	path = deps/litescope
+	url = https://github.com/bunnie/litescope.git
+	branch = add-trigger-depth
