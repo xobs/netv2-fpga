@@ -19,13 +19,13 @@ os.environ["PYTHONPATH"] = os.pathsep.join(python_path)
 os.environ["PYTHON"] = sys.executable
 
 # Build the bitstream
-#subprocess.Popen([sys.executable, script_path + os.path.sep + "netv2mvp.py", "video_overlay"]).wait()
+subprocess.Popen([sys.executable, script_path + os.path.sep + "netv2mvp.py", "video_overlay"]).wait()
 
 # Start the litex_server script
 #subprocess.Popen([sys.executable, "-mlitex.soc.tools.remote.litex_server"] +  + sys.argv[1:]).wait()
 
 # Start litex_term
-subprocess.Popen([sys.executable, "-mlitex.soc.tools.litex_term"] + sys.argv[1:]).wait()
+#subprocess.Popen([sys.executable, "-mlitex.soc.tools.litex_term"] + sys.argv[1:]).wait()
 
 # Debug environment using bash
 #os.execl("/bin/bash", "bash")
