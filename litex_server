@@ -1,0 +1,6 @@
+#!/usr/bin/env python3
+
+import subprocess
+import sys
+
+subprocess.Popen([sys.executable, "build.py", "litex_server"] + sys.argv[1:]).wait()
