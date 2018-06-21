@@ -11,7 +11,9 @@ These instructions can be used to quickly start devleopment.
 1. Go to https://www.xilinx.com/member/forms/license-form.html, get a license, and place it in ~/.Xilinx/Xilinx.lic
 1. Run `./build.py`
 
-There is a wrapper script in this repo to run litex_server and litex_term as well.  These may be invoked either with python (`python litex_server udp`) or on Unix-type systems they may be executed directly (`./litex_server udp`).
+There is a wrapper script in this repo to run litex_server and litex_term as well.  These may be invoked either with python (`python bin/litex_server udp`) or on Unix-type systems they may be executed directly (`./bin/litex_server udp`).
+
+You can add the `bin` directory to your PATH.
 
 On Windows, you must ensure `vivado.bat` is in your PATH.  If you're running 2018.1, this can be done as follows:
 
