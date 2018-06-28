@@ -85,7 +85,7 @@ def check_dependencies(args):
                 break
 
     if vivado_path == None:
-        print("vivado: toolchain not found in your PATH")
+        print("vivado: toolchain not found in your PATH -- download it from https://www.xilinx.com/support/download.html")
         dependency_errors += 1
     elif args.check_deps:
         print("vivado: found at {}".format(vivado_path))
@@ -97,7 +97,7 @@ def check_dependencies(args):
         print("make: found at {}".format(make_path))
 
     if riscv64_path == None:
-        print("riscv64: toolchain not found in your PATH")
+        print("riscv64: toolchain not found in your PATH -- download it from https://www.sifive.com/products/tools/")
         dependency_errors += 1
     elif args.check_deps:
         print("riscv64: found at {}".format(riscv64_path))
