@@ -593,7 +593,7 @@ class VideoOverlaySoC(BaseSoC):
     interrupt_map.update(BaseSoC.interrupt_map)
 
     def __init__(self, platform, *args, **kwargs):
-        BaseSoC.__init__(self, platform, *args, **kwargs)
+        BaseSoC.__init__(self, platform, csr_data_width=32, *args, **kwargs)
 
         # # #
 
