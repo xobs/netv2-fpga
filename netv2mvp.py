@@ -371,6 +371,7 @@ class BaseSoC(SoCSDRAM):
         "ddrphy",
 #        "dna",
         "xadc",
+        "cpu_or_bridge",
     ]
     csr_map_update(SoCSDRAM.csr_map, csr_peripherals)
 
@@ -383,6 +384,7 @@ class BaseSoC(SoCSDRAM):
             ident="NeTV2 LiteX Base SoC",
             reserve_nmi_interrupt=False,
             cpu_type="vexriscv",
+            cpu_debugging=True,
             **kwargs)
 
         self.submodules.crg = CRG(platform)
