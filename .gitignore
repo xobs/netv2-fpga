@@ -6,3 +6,7 @@
 *.swp
 *.swo
 build
+.env
+.vscode
+test/analyzer.csv
+test/csr.csv
