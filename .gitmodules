@@ -1,6 +1,6 @@
 [submodule "deps/litex"]
 	path = deps/litex
-	url = https://github.com/bunnie/litex.git
+	url = https://github.com/xobs/litex.git
 	branch = bunnie-mods
 [submodule "deps/migen"]
 	path = deps/migen
