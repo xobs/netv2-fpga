@@ -220,7 +220,7 @@ _io = [
 
 class Platform(XilinxPlatform):
     def __init__(self, toolchain="vivado", programmer="vivado"):
-        XilinxPlatform.__init__(self, "xc7a35t-fgg484-2", _io,
+        XilinxPlatform.__init__(self, "xc7a100t-fgg484-2", _io,
                                 toolchain=toolchain)
 
         # NOTE: to do quad-SPI mode, the QE bit has to be set in the SPINOR status register
