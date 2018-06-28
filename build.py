@@ -42,6 +42,69 @@ def fixup_env(script_path, args):
         os.environ["V"] = "1"
 
 
+def check_dependencies(args):
+    # Equivalent to the powershell Get-Command, and kinda like `which`
+    def get_command(cmd):
+        if os.name == 'nt':
+            path_ext = os.environ["PATHEXT"].split(os.pathsep)
+        else:
+            path_ext = [""]
+        for ext in path_ext:
+            for path in os.environ["PATH"].split(os.pathsep):
+
+                if os.path.exists(path + os.path.sep + cmd + ext):
+                    return path + os.path.sep + cmd + ext
+        return None
+
+    dependency_errors = 0
+
+    # Litex / Migen require Python 3.5 or newer.  Ensure we're running
+    # under a compatible version of Python.
+    if sys.version_info[:3] < (3, 5):
+        dependency_errors += 1
+        print("python: You need Python 3.5+ (version {} found)".format(sys.version_info[:3]))
+    elif args.check_deps:
+        import platform
+        print("python 3.5+: ok (Python {} found)".format(platform.python_version()))
+
+    vivado_path = get_command("vivado")
+    make_path = get_command("make")
+    riscv64_path = get_command("riscv64-unknown-elf-gcc")
+
+    if vivado_path == None:
+        # Look for the default Vivado install directory
+        if os.name == 'nt':
+            base_dir = r"C:\Xilinx\Vivado"
+        else:
+            base_dir = "/opt/Xilinx/Vivado"
+        for file in os.listdir(base_dir):
+            bin_dir = base_dir + os.path.sep + file + os.path.sep + "bin"
+            if os.path.exists(bin_dir + os.path.sep + "vivado"):
+                os.environ["PATH"] += os.pathsep + bin_dir
+                vivado_path = bin_dir
+                break
+
+    if vivado_path == None:
+        print("vivado: toolchain not found in your PATH")
+        dependency_errors += 1
+    elif args.check_deps:
+        print("vivado: found at {}".format(vivado_path))
+
+    if make_path == None:
+        print("make: GNU Make not found in PATH")
+        dependency_errors += 1
+    elif args.check_deps:
+        print("make: found at {}".format(make_path))
+
+    if riscv64_path == None:
+        print("riscv64: toolchain not found in your PATH")
+        dependency_errors += 1
+    elif args.check_deps:
+        print("riscv64: found at {}".format(riscv64_path))
+
+    if dependency_errors > 0:
+        raise SystemExit(str(dependency_errors) + " missing dependencies were found")
+
 def main(args):
 
     # Obtain the path to this script, plus a trailing separator.  This will
@@ -59,21 +122,9 @@ def main(args):
         print("PYTHON=" + sys.executable)
         return
 
-    # Litex / Migen require Python 3.5 or newer.  Ensure we're running
-    # under a compatible version of Python.
-    if sys.version_info[:3] < (3, 5):
-        raise SystemExit("You need Python 3.5+")
-
-    # On Windows, ensure we can run Vivado, and advise the user to add it
-    # to their PATH if not.
-    if os.name == 'nt':
-        vivado_found = False
-        for path in os.environ["PATH"].split(os.pathsep):
-            if os.path.exists(path + os.path.sep + "vivado"):
-                vivado_found = True
-        if vivado_found == False:
-            raise SystemExit(
-                "Vivado not found.  Please add Vivado to your PATH.")
+    check_dependencies(args)
+    if args.check_deps:
+        return
 
     # Determine which program to run.  If no program was specified, run
     # the netv2 synthesis program with some defaults args.
@@ -115,6 +166,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "-p", "--print-env", help="print environment variable listing for pycharm, vscode, or bash", action="store_true"
+    )
+    parser.add_argument(
+        "-c", "--check-deps", help="check build environment for dependencies such as compiler and fpga tools and then exit", action="store_true"
     )
     parser.add_argument('-e', '--exec', help="Command to run",
                         nargs=argparse.REMAINDER)
