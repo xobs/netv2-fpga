@@ -3,6 +3,12 @@ NETV2_DIR=../build
 include $(NETV2_DIR)/software/include/generated/variables.mak
 include $(SOC_DIRECTORY)/software/common.mak
 
+ifeq ($(OS),Windows_NT)
+COPY := cmd /c copy
+else
+COPY := cp
+endif
+
 OBJECTS=isr.o \
 		config.o \
 		processor.o \
@@ -31,8 +37,10 @@ all: firmware.bin
 
 %.bin: %.elf
 	$(OBJCOPY) -O binary $< $@
+ifneq ($(OS),Windows_NT)
 	chmod -x $@
-	cp $@ boot.bin
+endif
+	$(COPY) $@ boot.bin
 
 firmware.elf: $(OBJECTS)
 	$(LD) $(LDFLAGS) \
@@ -43,7 +51,9 @@ firmware.elf: $(OBJECTS)
 		-L$(NETV2_DIR)/software/libbase \
 		-L$(NETV2_DIR)/software/libcompiler_rt \
 		-lbase-nofloat -lcompiler_rt
+ifneq ($(OS),Windows_NT)
 	chmod -x $@
+endif
 
 main.o: main.c
 	$(compile)
