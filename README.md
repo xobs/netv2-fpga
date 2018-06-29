@@ -5,7 +5,7 @@ tl;dr:
 
 These instructions can be used to quickly start development.
 
-1. Check out this repo with `git clone --recurse-submodules [path]`.
+1. Check out this repo with `git clone --recurse-submodules https://github.com/xobs/netv2-fpga.git`.
 1. Ensure you have Python 3.5 or newer installed.
 1. Ensure you have `make` installed.
 1. Download the Risc-V toolchain from https://www.sifive.com/products/tools/ and put it in your PATH.
