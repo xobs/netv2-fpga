@@ -138,6 +138,8 @@ def main(args):
             cmd = [sys.executable, "-mlitex.soc.tools.litex_term"] + args.exec[1:]
         elif args.exec[0] == "mkmscimg":
             cmd = [sys.executable, "-mlitex.soc.tools.mkmscimg"] + args.exec[1:]
+        elif args.exec[0] == "vexriscv_debug":
+            cmd = [sys.executable, "-mlitex.soc.tools.vexriscv_debug"] + args.exec[1:]
         elif args.exec[0].endswith(".py"):
             cmd = [sys.executable] + args.exec
         else:
