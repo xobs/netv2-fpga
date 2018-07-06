@@ -384,8 +384,10 @@ class BaseSoC(SoCSDRAM):
             ident="NeTV2 LiteX Base SoC",
             reserve_nmi_interrupt=False,
             cpu_type="vexriscv",
-            cpu_debugging=True,
+            cpu_variant="debug",
             **kwargs)
+
+        self.comb += self.uart.reset.eq(self.cpu_or_bridge.debug_reset)
 
         self.submodules.crg = CRG(platform)
 #        self.submodules.dna = dna.DNA()
