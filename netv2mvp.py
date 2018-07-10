@@ -4,6 +4,7 @@
 
 import sys
 import os
+import argparse
 
 from migen import *
 from migen.genlib.resetsync import AsyncResetSynchronizer
@@ -1006,19 +1007,25 @@ def main():
         print( "PYTHONHASHEED must be set to 1 for consistent validation results. Failing to set this results in non-deterministic compilation results")
         exit()
 
-    platform = Platform()
-    if len(sys.argv) < 2:
-        print("missing target (base or pcie or video or video_overlay or video_raw_dma_loopback)")
-        exit()
-    if sys.argv[1] == "base":
+    parser = argparse.ArgumentParser(description="Build an NeTV2 bitstream and firmware")
+    parser.add_argument(
+        "-p", "--part", help="specify which FPGA part to build for", choices=["35", "100"], default="35"
+    )
+    parser.add_argument(
+        "-t", "--target", help="which FPGA environment to build for", choices=["base", "video_overlay", "pcie"], default="video_overlay"
+    )
+    args = parser.parse_args()
+
+    platform = Platform(part=args.part)
+    if args.target == "base":
         soc = BaseSoC(platform)
-    elif sys.argv[1] == "video_overlay":
+    elif args.target == "video_overlay":
         soc = VideoOverlaySoC(platform)
     builder = Builder(soc, output_dir="build", csr_csv="test/csr.csv")
     vns = builder.build()
     soc.do_exit(vns)
 
-    if sys.argv[1] == "pcie":
+    if args.target == "pcie":
         soc.generate_software_header()
 
 if __name__ == "__main__":
