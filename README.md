@@ -35,11 +35,23 @@ platforms where packages might not be available.
 
 There is a wrapper script in this repo to run litex_server and litex_term as well.  These may be invoked either with python (`python bin/litex_server udp`) or on Unix-type systems they may be executed directly (`./bin/litex_server udp`).
 
+## Xilinx PATH
+
+If your Xilinx install is in the default path (`C:\\Xilinx` on Windows, `/opt/Xilinx` on Linux), then the build system should be able to automatically find Xilinx.
+
+If not, you can add the `bin` directory to your PATH.
+
 ## PyCharm integration
 
 Without setting environment variables, PyCharm won't know about litex/migen modules, and will give you lots of errors.
 
-Get a list of environment variables to set by running `build.py --print-env`.  Then add those to the pycharm configuration:
+Get a list of environment variables to set by running `build.py --print-env > project.env`.  Then add those to the pycharm configuration.
+
+1. Install the `Env File` plugin.  *Preferences* -> *Plugins* -> *Browse repositories...* -> search for `Env File` -> *Install Plugin*
+1. Go to *Run* -> *Edit Configurations*
+1. Click *EnvFile*, tick *Enable EnvFile*, and click the *+* to browse for `project.env`
+
+More information at:
 
 https://stackoverflow.com/questions/42708389/how-to-set-environment-variables-in-pycharm
 
