@@ -1,7 +1,7 @@
 [submodule "deps/litex"]
 	path = deps/litex
-	url = https://github.com/xobs/litex.git
-	branch = bunnie-mods
+	url = https://github.com/enjoy-digital/litex.git
+	branch = master
 [submodule "deps/migen"]
 	path = deps/migen
 	url = https://github.com/bunnie/migen.git
