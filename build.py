@@ -145,9 +145,9 @@ def main(args):
         else:
             cmd = args.exec
     elif args.build != None:
-        cmd = [sys.executable, script_path + args.build, args.target]
+        cmd = [sys.executable, script_path + args.build, "-t", args.target]
     elif len(args.cmd) == 0:
-        cmd = [sys.executable, script_path + "netv2mvp.py", "video_overlay"]
+        cmd = [sys.executable, script_path + "netv2mvp.py", "-t", "video_overlay"]
 
     subprocess.Popen(cmd).wait()
 
