@@ -1,9 +1,9 @@
 # NeTV2 LiteX Quickstart Guide
 
-tl;dr:
-
 
 These instructions can be used to quickly start development.
+
+*tl;dr:*
 
 1. Check out this repo with `git clone --recurse-submodules https://github.com/xobs/netv2-fpga.git`.
 1. Ensure you have Python 3.5 or newer installed.
@@ -13,6 +13,15 @@ These instructions can be used to quickly start development.
 1. Do a minimal Xilinx install to /opt/Xilinx/, and untick everything except `Design Tools / Vivado Design Suite / Vivado` and `Devices / Production Devices / 7 Series`
 1. Go to https://www.xilinx.com/member/forms/license-form.html, get a license, and place it in ~/.Xilinx/Xilinx.lic
 1. Run `./build.py` (or `python3 ./build.py`)
+
+## Updating
+
+To update the repo to the upstream version, including all dependencies, run:
+
+```sh
+git pull
+git submodule update --recursive
+```
 
 ## Rationale
 
