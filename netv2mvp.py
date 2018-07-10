@@ -1009,7 +1009,7 @@ def main():
 
     parser = argparse.ArgumentParser(description="Build an NeTV2 bitstream and firmware")
     parser.add_argument(
-        "-p", "--part", help="specify which FPGA part to build for", choices=["35", "100"], default="35"
+        "-p", "--part", help="specify which FPGA part to build for", choices=["35", "50", "100"], default="35"
     )
     parser.add_argument(
         "-t", "--target", help="which FPGA environment to build for", choices=["base", "video_overlay", "pcie"], default="video_overlay"
