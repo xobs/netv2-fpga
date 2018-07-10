@@ -170,7 +170,17 @@ def addpackage(sitedir, name, known_paths):
                 continue
             try:
                 if line.startswith(("import ", "import\t")):
+                    # Python does something incredibly evil here: They eval() some
+                    # files on the filesystem, which ends up completely clobbering
+                    # sys.path.  This took me a very long time to find out.
+                    # Let's work around this brokenness by saving the path beforehand,
+                    # then comparing it afterwards, and undoing the damage they've done.
+                    saved_path = sys.path.copy()
                     exec(line)
+                    for element in sys.path:
+                        if element not in saved_path:
+                            saved_path.append(element)
+                    sys.path = saved_path
                     continue
                 line = line.rstrip()
                 dir, dircase = makepath(sitedir, line)
@@ -563,8 +573,8 @@ def main():
     known_paths = venv(known_paths)
     if ENABLE_USER_SITE is None:
         ENABLE_USER_SITE = check_enableusersite()
-#    known_paths = addusersitepackages(known_paths)
-#    known_paths = addsitepackages(known_paths)
+    known_paths = addusersitepackages(known_paths)
+    known_paths = addsitepackages(known_paths)
     setquit()
     setcopyright()
     sethelper()
