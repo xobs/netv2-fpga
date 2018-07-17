@@ -135,17 +135,13 @@ If not, you can add the `bin` directory to your PATH.
 
 ## PyCharm integration
 
-Without setting environment variables, PyCharm won't know about litex/migen modules, and will give you lots of errors.
+PyCharm needs to know about the dependency structure in order to allow you to drill down into modules and auto-complete statements.
 
-Get a list of environment variables to set by running `build.py --print-env > project.env`.  Then add those to the pycharm configuration.
+Open this directory in PyCharm and expand the `deps` directory.  Then hold down `Shift` and select all subdirectories under `deps/`.  For example, this will include `litedram`, `liteeth`, and so on.
 
-1. Install the `Env File` plugin.  *Preferences* -> *Plugins* -> *Browse repositories...* -> search for `Env File` -> *Install Plugin*
-1. Go to *Run* -> *Edit Configurations*
-1. Click *EnvFile*, tick *Enable EnvFile*, and click the *+* to browse for `project.env`
+Then, right-click and select `Mark directory as...` and select `Sources Root`.
 
-More information at:
-
-https://stackoverflow.com/questions/42708389/how-to-set-environment-variables-in-pycharm
+When running your module from within PyCharm, you may find it useful to set environment variables.  You can use `build.py -p > pycharm.env` to create a `.env`-compatible file.  There are several PyCharm plugins that can make use of this file.
 
 ## Visual Studio Code integration
 
