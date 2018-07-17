@@ -135,11 +135,13 @@ If not, you can add the `bin` directory to your PATH.
 
 ## PyCharm integration
 
-PyCharm needs to know about the dependency structure in order to allow you to drill down into modules and auto-complete statements.
+To use PyCharm, open this directory as a `Project` by going to the *File* menu and selecting *Open...*.  Make sure you open the entire directory, and not just a single file in this directory.
 
-Open this directory in PyCharm and expand the `deps` directory.  Then hold down `Shift` and select all subdirectories under `deps/`.  For example, this will include `litedram`, `liteeth`, and so on.
+When you first open this project, you'll see lots of red squigly lines indicating errors.  PyCharm needs to know about the dependency structure in order to allow you to drill down into modules and auto-complete statements.
 
-Then, right-click and select `Mark directory as...` and select `Sources Root`.
+Open this directory in PyCharm and expand the `deps/` directory.  Then hold down `Shift` and select all subdirectories under `deps/`.  This will include `litedram`, `liteeth`, and so on.
+
+Then, right-click and select `Mark directory as...` and select `Sources Root`.  The red squigly lines should go away, and PyCharm should now be configured.
 
 When running your module from within PyCharm, you may find it useful to set environment variables.  You can use `build.py -p > pycharm.env` to create a `.env`-compatible file.  There are several PyCharm plugins that can make use of this file.
 
