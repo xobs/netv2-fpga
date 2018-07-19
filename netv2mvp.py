@@ -574,6 +574,11 @@ class TimingDelayRGB(Module):
             self.comb += getattr(self.source, name).eq(s)
 
 class VideoOverlaySoC(BaseSoC):
+    mem_map = {
+        "vexriscv_debug": 0xf00f0000,
+    }
+    mem_map.update(BaseSoC.mem_map)
+
     csr_peripherals = [
         "hdmi_core_out0",
         "hdmi_in0",
@@ -597,7 +602,7 @@ class VideoOverlaySoC(BaseSoC):
     interrupt_map.update(BaseSoC.interrupt_map)
 
     def __init__(self, platform, *args, **kwargs):
-        BaseSoC.__init__(self, platform, csr_data_width=32, *args, **kwargs)
+        BaseSoC.__init__(self, platform, *args, **kwargs)
 
         # # #
 
@@ -901,6 +906,9 @@ class VideoOverlaySoC(BaseSoC):
             self.submodules.etherbone = LiteEthEtherbone(core.udp, 1234, mode="master", cd="etherbone")
             self.add_wb_master(self.etherbone.wishbone.bus)
 
+        # Attach the VexRiscv debug bus to RAM
+        self.register_mem("vexriscv_debug", self.mem_map["vexriscv_debug"], self.cpu_or_bridge.debug_bus, 0x1000)
+
         self.platform.add_false_path_constraints(
            self.crg.cd_sys.clk,
            self.crg.cd_eth.clk
@@ -915,59 +923,27 @@ class VideoOverlaySoC(BaseSoC):
 
         from litescope import LiteScopeAnalyzer
 
-        pix_aggregate = Signal(24)
-        t4d_aggregate = Signal(12)
-        self.comb += pix_aggregate.eq(Cat(self.hdmi_in0.syncpol.b,self.hdmi_in0.syncpol.g,self.hdmi_in0.syncpol.r))
-        self.comb += t4d_aggregate.eq(Cat(self.hdmi_in0.decode_terc4.data0_dect4.decval.d,
-                                          self.hdmi_in0.decode_terc4.data1_dect4.decval.d,
-                                          self.hdmi_in0.decode_terc4.data2_dect4.decval.d))
-        t4d_crypto = Signal(12)
-        self.comb += t4d_crypto.eq(Cat(0,0,self.hdcp.cipher_stream[2],0,self.hdcp.cipher_stream[8:12],self.hdcp.cipher_stream[16:20]))
-        main_raw = Signal(30)
-        self.comb += main_raw.eq(Cat(c0_pix_o,c1_pix_o,c2_pix_o))
-        overlay_raw = Signal(30)
-        self.comb += overlay_raw.eq(Cat(encoder_blu.out,encoder_grn.out,encoder_red.out))
-
         analyzer_signals = [
-#            main_raw,
-#            overlay_raw,
-#            self.hdcp.hdcp_debug,
-#            self.hdcp.le_debug,
-#            self.hdcp.cipher_debug,
-#            rect_on,
-            rectangle.hcounter,
-            rectangle.vcounter,
-            self.hdcp.cipher_stream,
-            pix_aggregate,
-            self.hdcp.stream_ready,
-            self.hdcp.hdcp_ena,
-            hdmi_in0.decode_terc4.encrypting_video,
-            hdmi_in0.decode_terc4.encrypting_data,
-            self.hdcp.de,
-            self.hdcp.hsync,
-            self.hdcp.vsync,
-            self.hdcp.Aksv14_write,
-            self.hdcp.hpd,
-            self.hdcp.ctl_code,
-            self.hdcp.line_end,
-            hdcp.Km_valid.storage,
-#            t4d_aggregate,
-#            self.hdcp.Km_debug,
-#            self.hdcp.An_debug,
-#            sanity
-        ]
-        self.platform.add_false_path_constraints( # for I2C snoop -> HDCP, and also covers logic analyzer path when configured
-           self.crg.cd_eth.clk,
-           self.hdmi_in0.clocking.cd_pix_o.clk
-        )
-#        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 128, cd="pix_o", cd_ratio=1, edges=True, hitcountbits=16, triggers=2)
-        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 256, cd="pix_o", trigger_depth=16)
+            self.cpu_or_bridge.debug_bus.stb,
+            self.cpu_or_bridge.debug_bus.cyc,
+            self.cpu_or_bridge.debug_bus.dat_w,
+            self.cpu_or_bridge.debug_bus.sel,
+            self.cpu_or_bridge.debug_bus.dat_r,
 
-#        self.comb += [
-#            hitcount1.eq(self.analyzer.frontend.trigger.hit_counter),
-#            hitcount2.eq(self.analyzer.frontend.trigger2.hit_counter)
-#        ]
-    #        self.sync += platform.request("fpga_led4", 0).eq(self.analyzer.storage.sink.hit)  # OV0 red
+            self.cpu_or_bridge.i_cmd_valid,
+            self.cpu_or_bridge.i_cmd_payload_wr,
+            self.cpu_or_bridge.i_cmd_payload_address,
+            self.cpu_or_bridge.i_cmd_payload_data,
+            self.cpu_or_bridge.o_cmd_ready,
+            self.cpu_or_bridge.o_rsp_data,
+            self.cpu_or_bridge.o_resetOut,
+
+            self.cpu_or_bridge.transfer_complete,
+            self.cpu_or_bridge.transfer_in_progress,
+            self.cpu_or_bridge.transfer_wait_for_ack,
+        ]
+        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 32, cd="sys", trigger_depth=16)
+
         self.sync += platform.request("fpga_led4", 0).eq(0)  # OV0 red
 
     def do_exit(self, vns):
