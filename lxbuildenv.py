@@ -159,46 +159,31 @@ def main(args):
     check_dependencies(args)
     check_submodules(script_path, args)
 
-    # Determine which program to run.  If no program was specified, run
-    # the netv2 synthesis program with some defaults args.
-    # Note: This can be useful to run a test prompt, e.g. by running this
-    # script with "bash" as an argument.
-    if args.exec != None:
-        if args.exec[0].endswith(".py"):
-            cmd = [sys.executable] + args.exec
-        else:
-            cmd = args.exec
-    elif args.build != None:
-        cmd = [sys.executable, script_path + args.build, "-t", args.target]
-    elif len(args.cmd) == 0:
-        cmd = [sys.executable, script_path +
-               "netv2mvp.py", "-t", "video_overlay"]
+    if args.exec[0].endswith(".py"):
+        cmd = [sys.executable] + args.exec
+    else:
+        cmd = args.exec
     subprocess.Popen(cmd).wait()
 
 
 
 # For the main command, parse args and hand it off to main()
 if __name__ == "__main__":
-    print("lxbuildenv environment")
-    # Parse script arguments into a tuple.  Known arguments go into the
-    # "args" dict, with the command-to-run stored in args.cmd
     parser = argparse.ArgumentParser(
-        description="Wrap Python code to enable quickstart")
+        description="Wrap Python code to enable quickstart",
+        add_help=False)
     parser.add_argument(
-        "-v", "--verbose", help="increase verboseness of make processes", action="store_true")
-    parser.add_argument(
-        "-b", "--build", help="script target to build", default="netv2mvp.py"
+        "-h", "--help", "--lx-help", help="show this help message and exit", action="help"
     )
     parser.add_argument(
-        "-t", "--target", help="target to build in the script", default="video_overlay"
+        "-v", "--lx-verbose", help="increase verboseness of make processes", action="store_true")
+    parser.add_argument(
+        "-p", "--lx-print-env", help="print environment variable listing for pycharm, vscode, or bash", action="store_true"
     )
     parser.add_argument(
-        "-p", "--print-env", help="print environment variable listing for pycharm, vscode, or bash", action="store_true"
+        "-c", "--lx-check-deps", help="check build environment for dependencies such as compiler and fpga tools and then exit", action="store_true"
     )
-    parser.add_argument(
-        "-c", "--check-deps", help="check build environment for dependencies such as compiler and fpga tools and then exit", action="store_true"
-    )
-    parser.add_argument('-e', '--exec', help="Command to run",
+    parser.add_argument('-e', '--exec', '--lx-exec', help="Command to run", required=True,
                         nargs=argparse.REMAINDER)
     args = parser.parse_args()
 
