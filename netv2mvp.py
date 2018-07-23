@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 
-## IMPORTANT: PYTHONHASHSEED should be set to "0" for best validation match
+# lxbuildenv must be imported first, because it has a chance to re-exec Python.
+# This module ensures the dependencies are present and the environment variables
+# are all set appropriately.  Additionally, the PATH will include toolchains,
+# and all dependencies get verified.
+import lxbuildenv
 
 import sys
 import os
@@ -408,7 +412,7 @@ class BaseSoC(SoCSDRAM):
                             sdram_module.timing_settings,
                             controller_settings=ControllerSettings(with_bandwidth=True,
                                                                    cmd_buffer_depth=8,
-                                                                   with_refresh=False))
+                                                                   with_refresh=True))
 
         # common led
         self.sys_led = Signal()
@@ -597,7 +601,7 @@ class VideoOverlaySoC(BaseSoC):
     interrupt_map.update(BaseSoC.interrupt_map)
 
     def __init__(self, platform, *args, **kwargs):
-        BaseSoC.__init__(self, platform, csr_data_width=32, *args, **kwargs)
+        BaseSoC.__init__(self, platform, *args, **kwargs)
 
         # # #
 
