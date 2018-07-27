@@ -99,12 +99,13 @@ def check_dependencies(args):
             base_dir = r"C:\Xilinx\Vivado"
         else:
             base_dir = "/opt/Xilinx/Vivado"
-        for file in os.listdir(base_dir):
-            bin_dir = base_dir + os.path.sep + file + os.path.sep + "bin"
-            if os.path.exists(bin_dir + os.path.sep + "vivado"):
-                os.environ["PATH"] += os.pathsep + bin_dir
-                vivado_path = bin_dir
-                break
+        if os.path.exists(base_dir):
+            for file in os.listdir(base_dir):
+                bin_dir = base_dir + os.path.sep + file + os.path.sep + "bin"
+                if os.path.exists(bin_dir + os.path.sep + "vivado"):
+                    os.environ["PATH"] += os.pathsep + bin_dir
+                    vivado_path = bin_dir
+                    break
 
     if vivado_path == None:
         print("vivado: toolchain not found in your PATH -- download it from https://www.xilinx.com/support/download.html")
