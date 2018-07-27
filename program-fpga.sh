@@ -14,7 +14,7 @@ then
 fi
 
 # Raspi2 and Raspi3  peripheral_base address
-gpip_peripheral_base_addr=0x3F000000
+gpio_peripheral_base_addr=0x3F000000
 
 # Raspi1  peripheral_base address
 # gpio_peripheral_base=0x20000000
@@ -52,7 +52,7 @@ gpio_speed_coeffs="340000 10"
 $OPENOCD -c 'interface bcm2835gpio' \
 	-c 'transport select jtag' \
 	-c 'set _CHIPNAME xc7a35t' \
-	-c "bcm2835gpio_peripheral_base ${gpio_peripheral_base}" \
+	-c "bcm2835gpio_peripheral_base ${gpio_peripheral_base_addr}" \
 	-c "bcm2835gpio_speed_coeffs ${gpio_speed_coeffs}" \
 	-c 'bcm2835gpio_jtag_nums 4 17 27 22' \
 	-c 'bcm2835gpio_srst_num 24' \
