@@ -6,6 +6,12 @@
 # and all dependencies get verified.
 import lxbuildenv
 
+# This variable defines all the external programs that this module
+# relies on.  lxbuildenv reads this variable in order to ensure
+# the build will finish without exiting due to missing third-party
+# programs.
+LX_DEPENDENCIES = ["riscv", "vivado"]
+
 import sys
 import os
 import argparse
