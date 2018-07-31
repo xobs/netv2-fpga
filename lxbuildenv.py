@@ -14,6 +14,43 @@ import argparse
 # to a variety of support directories.
 script_path = os.path.dirname(os.path.realpath(__file__)) + os.path.sep
 
+# Look through the specified file for known variables to get the dependency list
+def get_required_dependencies(filename):
+    import ast
+
+    # Always check the Python version
+    dependencies = {
+        'python': 1
+    }
+    main_src = ""
+
+    try:
+        with open(sys.argv[0], 'r') as f:
+            main_src = f.read()
+        main_ast = ast.parse(main_src, filename=filename)
+    except:
+        return list(dependencies.keys())
+
+    # Iterate through the top-level nodes looking for variables named
+    # LX_DEPENDENCIES or LX_DEPENDENCY and get the values that are
+    # assigned to them.
+    for node in ast.iter_child_nodes(main_ast):
+        if isinstance(node, ast.Assign):
+            value = node.value
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    if target.id == "LX_DEPENDENCIES" or target.id == "LX_DEPENDENCY":
+                        if isinstance(value, (ast.List, ast.Tuple)):
+                            for elt in value.elts:
+                                if isinstance(elt, ast.Str):
+                                    dependencies[elt.s] = 1
+                        elif isinstance(value, ast.Str):
+                            dependencies[value.s] = 1
+
+    # Set up sub-dependencies
+    if 'riscv' in dependencies:
+        dependencies['make'] = 1
+    return list(dependencies.keys())
 
 def fixup_env(script_path, args):
     # Python has no concept of a local dependency path, such as the C `-I``
@@ -60,39 +97,30 @@ def fixup_env(script_path, args):
 
         sys.exit(0)
 
+# Equivalent to the powershell Get-Command, and kinda like `which`
+def get_command(cmd):
+    if os.name == 'nt':
+        path_ext = os.environ["PATHEXT"].split(os.pathsep)
+    else:
+        path_ext = [""]
+    for ext in path_ext:
+        for path in os.environ["PATH"].split(os.pathsep):
 
-# Validate that the required dependencies (Vivado, compilers, etc.)
-# have been installed.
-def check_dependencies(args):
-    # Equivalent to the powershell Get-Command, and kinda like `which`
-    def get_command(cmd):
-        if os.name == 'nt':
-            path_ext = os.environ["PATHEXT"].split(os.pathsep)
-        else:
-            path_ext = [""]
-        for ext in path_ext:
-            for path in os.environ["PATH"].split(os.pathsep):
+            if os.path.exists(path + os.path.sep + cmd + ext):
+                return path + os.path.sep + cmd + ext
+    return None
 
-                if os.path.exists(path + os.path.sep + cmd + ext):
-                    return path + os.path.sep + cmd + ext
-        return None
-
-    dependency_errors = 0
-
+def check_python_version(args):
+    import platform
     # Litex / Migen require Python 3.5 or newer.  Ensure we're running
     # under a compatible version of Python.
     if sys.version_info[:3] < (3, 5):
-        dependency_errors += 1
-        print(
+        return (False,
             "python: You need Python 3.5+ (version {} found)".format(sys.version_info[:3]))
-    elif args.lx_check_deps:
-        import platform
-        print("python 3.5+: ok (Python {} found)".format(platform.python_version()))
+    return (True, "python 3.5+: ok (Python {} found)".format(platform.python_version()))
 
+def check_vivado(args):
     vivado_path = get_command("vivado")
-    make_path = get_command("make")
-    riscv64_path = get_command("riscv64-unknown-elf-gcc")
-
     if vivado_path == None:
         # Look for the default Vivado install directory
         if os.name == 'nt':
@@ -106,28 +134,54 @@ def check_dependencies(args):
                     os.environ["PATH"] += os.pathsep + bin_dir
                     vivado_path = bin_dir
                     break
-
     if vivado_path == None:
-        print("vivado: toolchain not found in your PATH -- download it from https://www.xilinx.com/support/download.html")
-        dependency_errors += 1
-    elif args.lx_check_deps:
-        print("vivado: found at {}".format(vivado_path))
+        return (False, "toolchain not found in your PATH", "download it from https://www.xilinx.com/support/download.html")
+    return (True, "found at {}".format(vivado_path))
 
+def check_make(args):
+    make_path = get_command("make")
     if make_path == None:
-        print("make: GNU Make not found in PATH")
-        dependency_errors += 1
-    elif args.lx_check_deps:
-        print("make: found at {}".format(make_path))
+        return (False, "GNU Make not found in your PATH")
+    return (True, "found at {}".format(make_path))
 
+def check_riscv(args):
+    riscv64_path = get_command("riscv64-unknown-elf-gcc")
     if riscv64_path == None:
-        print("riscv64: toolchain not found in your PATH -- download it from https://www.sifive.com/products/tools/")
-        dependency_errors += 1
-    elif args.lx_check_deps:
-        print("riscv64: found at {}".format(riscv64_path))
+        return (False, "toolchain not found in your PATH", "download it from https://www.sifive.com/products/tools/")
+    return print(True, "found at {}".format(riscv64_path))
 
+dependency_checkers = {
+    'python': check_python_version,
+    'vivado': check_vivado,
+    'make': check_make,
+    'riscv': check_riscv,
+}
+
+# Validate that the required dependencies (Vivado, compilers, etc.)
+# have been installed.
+def check_dependencies(args, dependency_list):
+
+    dependency_errors = 0
+    for dependency_name in dependency_list:
+        if not dependency_name in dependency_checkers:
+            print('WARNING: Unrecognized dependency "{}"'.format(dependency_name))
+            continue
+        result = dependency_checkers[dependency_name](args)
+        if result[0] == False:
+            if len(result) > 2:
+                print('{}: {} -- {}'.format(dependency_name, result[1], result[2]))
+            else:
+                print('{}: {}'.format(dependency_name, result[1]))
+            dependency_errors = dependency_errors + 1
+
+        elif args.lx_check_deps:
+            print('{}: {}'.format(dependency_name, result[1]))
     if dependency_errors > 0:
-        raise SystemExit(str(dependency_errors) +
-                         " missing dependencies were found")
+        if args.lx_ignore_deps:
+            print('{} missing dependencies were found but continuing anyway'.format(dependency_errors))
+        else:
+            raise SystemExit(str(dependency_errors) +
+                             " missing dependencies were found")
 
     if args.lx_check_deps:
         sys.exit(0)
@@ -157,7 +211,8 @@ def main(args):
 
     # Add any environment variables that are used for child scripts
     fixup_env(script_path, args)
-    check_dependencies(args)
+    deps = get_required_dependencies(args.exec[0])
+    check_dependencies(args, deps)
     check_submodules(script_path, args)
 
     if args.exec[0].endswith(".py"):
@@ -190,12 +245,16 @@ if __name__ == "__main__":
 
     main(args)
 
+elif not os.path.isfile(sys.argv[0]):
+    print("lxbuildenv doesn't operate while in interactive mode")
+
 elif "LXBUILDENV_REEXEC" not in os.environ:
     parser = argparse.ArgumentParser(
         description="Wrap Python code to enable quickstart",
         add_help=False)
     parser.add_argument(
-        "--lx-verbose", help="increase verboseness of some processes", action="store_true")
+        "--lx-verbose", help="increase verboseness of some processes", action="store_true"
+    )
     parser.add_argument(
         "--lx-print-env", help="print environment variable listing for pycharm, vscode, or bash", action="store_true"
     )
@@ -203,12 +262,29 @@ elif "LXBUILDENV_REEXEC" not in os.environ:
         "--lx-check-deps", help="check build environment for dependencies such as compiler and fpga tools and then exit", action="store_true"
     )
     parser.add_argument(
+        "--lx-all-deps", help="print all possible dependencies and then exit", action="store_true"
+    )
+    parser.add_argument(
         "--lx-help", action="help"
+    )
+    parser.add_argument(
+        "--lx-ignore-deps", help="try building even if dependencies are missing", action="store_true"
     )
     (args, rest) = parser.parse_known_args()
 
+    if args.lx_all_deps:
+        print('Known dependencies:')
+        for dep in dependency_checkers.keys():
+            print('    {}'.format(dep))
+        print('To define a dependency, add a variable inside {} at the top level called LX_DEPENDENCIES and assign it a list or tuple.'.format(sys.argv[0]))
+        print('For example:')
+        print('LX_DEPENDENCIES = ("riscv", "vivado")')
+        sys.exit(0)
+
+    deps = get_required_dependencies(sys.argv[0])
+
     fixup_env(script_path, args)
-    check_dependencies(args)
+    check_dependencies(args, deps)
     check_submodules(script_path, args)
 
     try:
