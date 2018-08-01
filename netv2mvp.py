@@ -3,7 +3,7 @@
 # lxbuildenv must be imported first, because it has a chance to re-exec Python.
 # This module ensures the dependencies are present and the environment variables
 # are all set appropriately.  Additionally, the PATH will include toolchains,
-# and all dependencies get verified.
+# and all dependencies will be verified.
 import lxbuildenv
 
 # This variable defines all the external programs that this module
@@ -584,6 +584,11 @@ class TimingDelayRGB(Module):
             self.comb += getattr(self.source, name).eq(s)
 
 class VideoOverlaySoC(BaseSoC):
+    mem_map = {
+        "vexriscv_debug": 0xf00f0000,
+    }
+    mem_map.update(BaseSoC.mem_map)
+
     csr_peripherals = [
         "hdmi_core_out0",
         "hdmi_in0",
@@ -911,105 +916,18 @@ class VideoOverlaySoC(BaseSoC):
             self.submodules.etherbone = LiteEthEtherbone(core.udp, 1234, mode="master", cd="etherbone")
             self.add_wb_master(self.etherbone.wishbone.bus)
 
+        # Attach the VexRiscv debug bus to RAM
+        self.register_mem("vexriscv_debug", self.mem_map["vexriscv_debug"], self.cpu_or_bridge.debug_bus, 0x10)
+
         self.platform.add_false_path_constraints(
            self.crg.cd_sys.clk,
            self.crg.cd_eth.clk
         )
 
-        # analyzer UART
-#        from litex.soc.cores.uart import UARTWishboneBridge
-        #            platform.request("serial",1), self.clk_freq, baudrate=3000000)
-#        self.submodules.bridge = UARTWishboneBridge(
-#            platform.request("serial",1), self.clk_freq, baudrate=115200)
-#        self.add_wb_master(self.bridge.wishbone)
-
-        from litescope import LiteScopeAnalyzer
-
-        pix_aggregate = Signal(24)
-        t4d_aggregate = Signal(12)
-        self.comb += pix_aggregate.eq(Cat(self.hdmi_in0.syncpol.b,self.hdmi_in0.syncpol.g,self.hdmi_in0.syncpol.r))
-        self.comb += t4d_aggregate.eq(Cat(self.hdmi_in0.decode_terc4.data0_dect4.decval.d,
-                                          self.hdmi_in0.decode_terc4.data1_dect4.decval.d,
-                                          self.hdmi_in0.decode_terc4.data2_dect4.decval.d))
-        t4d_crypto = Signal(12)
-        self.comb += t4d_crypto.eq(Cat(0,0,self.hdcp.cipher_stream[2],0,self.hdcp.cipher_stream[8:12],self.hdcp.cipher_stream[16:20]))
-        main_raw = Signal(30)
-        self.comb += main_raw.eq(Cat(c0_pix_o,c1_pix_o,c2_pix_o))
-        overlay_raw = Signal(30)
-        self.comb += overlay_raw.eq(Cat(encoder_blu.out,encoder_grn.out,encoder_red.out))
-
-        analyzer_signals = [
-#            main_raw,
-#            overlay_raw,
-#            self.hdcp.hdcp_debug,
-#            self.hdcp.le_debug,
-#            self.hdcp.cipher_debug,
-#            rect_on,
-            rectangle.hcounter,
-            rectangle.vcounter,
-            self.hdcp.cipher_stream,
-            pix_aggregate,
-            self.hdcp.stream_ready,
-            self.hdcp.hdcp_ena,
-            hdmi_in0.decode_terc4.encrypting_video,
-            hdmi_in0.decode_terc4.encrypting_data,
-            self.hdcp.de,
-            self.hdcp.hsync,
-            self.hdcp.vsync,
-            self.hdcp.Aksv14_write,
-            self.hdcp.hpd,
-            self.hdcp.ctl_code,
-            self.hdcp.line_end,
-            hdcp.Km_valid.storage,
-#            t4d_aggregate,
-#            self.hdcp.Km_debug,
-#            self.hdcp.An_debug,
-#            sanity
-        ]
-        self.platform.add_false_path_constraints( # for I2C snoop -> HDCP, and also covers logic analyzer path when configured
-           self.crg.cd_eth.clk,
-           self.hdmi_in0.clocking.cd_pix_o.clk
-        )
-#        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 128, cd="pix_o", cd_ratio=1, edges=True, hitcountbits=16, triggers=2)
-        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 256, cd="pix_o", trigger_depth=16)
-
-#        self.comb += [
-#            hitcount1.eq(self.analyzer.frontend.trigger.hit_counter),
-#            hitcount2.eq(self.analyzer.frontend.trigger2.hit_counter)
-#        ]
-    #        self.sync += platform.request("fpga_led4", 0).eq(self.analyzer.storage.sink.hit)  # OV0 red
         self.sync += platform.request("fpga_led4", 0).eq(0)  # OV0 red
 
-    def do_exit(self, vns):
-        self.analyzer.export_csv(vns, "test/analyzer.csv")
-"""
-        # litescope
-        litescope_serial = platform.request("serial", 1)
-        litescope_bus = Signal(128)
-        litescope_i = Signal(16)
-        litescope_o = Signal(16)
-        self.specials += [
-            Instance("litescope",
-                i_clock=ClockSignal(),
-                i_reset=ResetSignal(),
-                i_serial_rx=litescope_serial.rx,
-                o_serial_tx=litescope_serial.tx,
-                i_bus=litescope_bus,
-                i_i=litescope_i,
-                o_o=litescope_o
-            )
-        ]
-        platform.add_source(os.path.join("litescope", "litescope.v"))
-
-        # litescope test
-        self.comb += [
-            litescope_bus.eq(0x12345678ABCFEF),
-            platform.request("user_led", 1).eq(litescope_o[0]),
-            platform.request("user_led", 2).eq(litescope_o[1]),
-            litescope_i.eq(0x5AA5)
-        ]
-"""
-
+#    def do_exit(self, vns):
+#        self.analyzer.export_csv(vns, "test/analyzer.csv")
 
 
 def main():
@@ -1033,7 +951,7 @@ def main():
         soc = VideoOverlaySoC(platform)
     builder = Builder(soc, output_dir="build", csr_csv="test/csr.csv")
     vns = builder.build()
-    soc.do_exit(vns)
+#    soc.do_exit(vns)
 
     if args.target == "pcie":
         soc.generate_software_header()
