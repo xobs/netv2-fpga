@@ -9,6 +9,8 @@ import subprocess
 import argparse
 
 
+DEPS_DIR = "deps"
+
 # Obtain the path to this script, plus a trailing separator.  This will
 # be used later on to construct various environment variables for paths
 # to a variety of support directories.
@@ -52,7 +54,7 @@ def get_required_dependencies(filename):
         dependencies['make'] = 1
     return list(dependencies.keys())
 
-def fixup_env(script_path, args):
+def get_python_path(script_path, args):
     # Python has no concept of a local dependency path, such as the C `-I``
     # switch, or the nodejs `node_modules` path, or the rust cargo registry.
     # Instead, it relies on an environment variable to append to the search
@@ -60,11 +62,15 @@ def fixup_env(script_path, args):
     # Construct this variable by adding each subdirectory under the `deps/`
     # directory to the PYTHONPATH environment variable.
     python_path = []
-    for dep in os.listdir(script_path + "deps"):
-        dep = script_path + "deps" + os.path.sep + dep
-        if os.path.isdir(dep):
-            python_path.append(dep)
-    os.environ["PYTHONPATH"] = os.pathsep.join(python_path)
+    if os.path.isdir(script_path + DEPS_DIR):
+        for dep in os.listdir(script_path + DEPS_DIR):
+            dep = script_path + DEPS_DIR + os.path.sep + dep
+            if os.path.isdir(dep):
+                python_path.append(dep)
+    return python_path
+
+def fixup_env(script_path, args):
+    os.environ["PYTHONPATH"] = os.pathsep.join(get_python_path(script_path, 0))
 
     # Set the "LXBUILDENV_REEXEC" variable to prevent the script from continuously
     # reinvoking itself.
@@ -138,23 +144,33 @@ def check_vivado(args):
         return (False, "toolchain not found in your PATH", "download it from https://www.xilinx.com/support/download.html")
     return (True, "found at {}".format(vivado_path))
 
+def check_cmd(args, cmd, name=None, fix=None):
+    if name is None:
+        name = cmd
+    path = get_command(cmd)
+    if path == None:
+        return (False, name + " not found in your PATH", fix)
+    return (True, "found at {}".format(path))
+
 def check_make(args):
-    make_path = get_command("make")
-    if make_path == None:
-        return (False, "GNU Make not found in your PATH")
-    return (True, "found at {}".format(make_path))
+    return check_cmd(args, "make", "GNU Make")
 
 def check_riscv(args):
-    riscv64_path = get_command("riscv64-unknown-elf-gcc")
-    if riscv64_path == None:
-        return (False, "toolchain not found in your PATH", "download it from https://www.sifive.com/products/tools/")
-    return print(True, "found at {}".format(riscv64_path))
+    return check_cmd(args, "riscv64-unknown-elf-gcc", "riscv toolchain", "download it from https://www.sifive.com/products/tools/")
+
+def check_yosys(args):
+    return check_cmd(args, "yosys")
+
+def check_arachne(args):
+    return check_cmd(args, "arachne-pnr")
 
 dependency_checkers = {
     'python': check_python_version,
     'vivado': check_vivado,
     'make': check_make,
     'riscv': check_riscv,
+    'yosys': check_yosys,
+    'arachne-pnr': check_arachne,
 }
 
 # Validate that the required dependencies (Vivado, compilers, etc.)
@@ -174,8 +190,8 @@ def check_dependencies(args, dependency_list):
                 print('{}: {}'.format(dependency_name, result[1]))
             dependency_errors = dependency_errors + 1
 
-        elif args.lx_check_deps:
-            print('{}: {}'.format(dependency_name, result[1]))
+        elif args.lx_check_deps or args.lx_verbose:
+            print('dependency: {}: {}'.format(dependency_name, result[1]))
     if dependency_errors > 0:
         if args.lx_ignore_deps:
             print('{} missing dependencies were found but continuing anyway'.format(dependency_errors))
@@ -186,20 +202,31 @@ def check_dependencies(args, dependency_list):
     if args.lx_check_deps:
         sys.exit(0)
 
+# Return True if the given tree needs to be initialized
+def check_module_recursive(root_path, depth, verbose=False):
+    if verbose:
+        print('git-dep: checking if "{}" requires updating...'.format(root_path))
+    # If the directory isn't a valid git repo, initialization is required
+    if not os.path.exists(root_path + os.path.sep + '.git'):
+        return True
 
-# Determine whether we need to invoke "git submodules init --recurse"
-def check_submodules(script_path, args):
-    need_init = False
-    gitmodules = open(script_path + '.gitmodules', 'r')
+    # If there are no submodules, no initialization needs to be done
+    if not os.path.isfile(root_path + os.path.sep + '.gitmodules'):
+        return False
+
+    # Loop through the gitmodules to check all submodules
+    gitmodules = open(root_path + os.path.sep + '.gitmodules', 'r')
     for line in gitmodules:
         parts = line.split("=", 2)
         if parts[0].strip() == "path":
             path = parts[1].strip()
-            if not os.path.exists(script_path + path + os.path.sep + ".git"):
-                need_init = True
-                print("Couldn't find {}".format(path + os.path.sep + ".git"))
-                break
-    if need_init:
+            if check_module_recursive(root_path + os.path.sep + path, depth + 1, verbose=verbose):
+                return True
+    return False
+
+# Determine whether we need to invoke "git submodules init --recurse"
+def check_submodules(script_path, args):
+    if check_module_recursive(script_path, 0, verbose=args.lx_verbose):
         print("Missing submodules -- updating")
         subprocess.Popen(["git", "submodule", "update",
                           "--init", "--recursive"], cwd=script_path).wait()
@@ -208,20 +235,119 @@ def check_submodules(script_path, args):
 
 
 def main(args):
+    if args.init:
+        main_name = os.getcwd().split(os.path.sep)[-1] + '.py'
+        new_main_name = input('What would you like your main program to be called? [' + main_name + '] ')
+        if new_main_name is not None and new_main_name != "":
+            main_name = new_main_name
 
-    # Add any environment variables that are used for child scripts
-    fixup_env(script_path, args)
-    deps = get_required_dependencies(args.exec[0])
-    check_dependencies(args, deps)
-    check_submodules(script_path, args)
+        print("Initializing git repository")
+        if not os.path.exists(DEPS_DIR):
+            os.mkdir(DEPS_DIR)
 
-    if args.exec[0].endswith(".py"):
-        cmd = [sys.executable] + args.exec
-    else:
-        cmd = args.exec
-    subprocess.Popen(cmd).wait()
+        os.system("git init")
+        os.system("git add " + str(__file__))
 
+        os.system("git submodule add https://github.com/m-labs/migen.git deps/migen")
+        os.system("git add deps/migen")
 
+        os.system("git submodule add https://github.com/enjoy-digital/litex.git deps/litex")
+        os.system("git add deps/litex")
+
+        os.system("git submodule add https://github.com/enjoy-digital/litescope deps/litescope")
+        os.system("git add deps/litescope")
+
+        os.system("git submodule add https://github.com/pyserial/pyserial.git deps/pyserial")
+        os.system("git add deps/pyserial")
+
+        os.system("git submodule update --init --recursive")
+
+        bin_tools = {
+            'litex_server': 'litex.soc.tools.remote.litex_server',
+            'litex_term': 'litex.soc.tools.litex_term',
+            'mkmscimg': 'litex.soc.tools.mkmscimg',
+        }
+        bin_template = """
+#!/usr/bin/env python3
+
+import sys
+import os
+
+# This script lives in the "bin" directory, but uses a helper script in the parent
+# directory.  Obtain the current path so we can get the absolute parent path.
+script_path = os.path.dirname(os.path.realpath(
+    __file__)) + os.path.sep + os.path.pardir + os.path.sep
+sys.path.insert(0, script_path)it
+import lxbuildenv
+
+from litex.soc.tools.mkmscimg import main
+main()"""
+        # Create binary programs under bin/
+        if not os.path.exists("bin"):
+            print("Creating binaries")
+            os.mkdir("bin")
+            for bin_name, python_module in bin_tools.items():
+                with open('bin' + os.path.sep + bin_name, 'w') as new_bin:
+                    new_bin.write(bin_template)
+                    new_bin.write('from ' + python_module + ' import main\n')
+                    new_bin.write('main()\n')
+                os.system('git add --chmod=+x bin' + os.path.sep + bin_name)
+
+        with open(main_name, 'w') as m:
+            program_template = """#!/usr/bin/env python3
+# This variable defines all the external programs that this module
+# relies on.  lxbuildenv reads this variable in order to ensure
+# the build will finish without exiting due to missing third-party
+# programs.
+LX_DEPENDENCIES = ["riscv", "vivado"]
+
+# Import lxbuildenv to integrate the deps/ directory
+import lxbuildenv
+
+from migen import *
+from litex.build.generic_platform import *
+
+_io = [
+    ("clk50", 0, Pins("J19"), IOStandard("LVCMOS33")),
+]
+
+class Platform(XilinxPlatform):
+    def __init__(self, toolchain="vivado", programmer="vivado", part="35"):
+        part = "xc7a" + part + "t-fgg484-2"
+    def create_programmer(self):
+        if self.programmer == "vivado":
+            return VivadoProgrammer(flash_part="n25q128-3.3v-spi-x1_x2_x4")
+        else:
+            raise ValueError("{} programmer is not supported"
+                             .format(self.programmer))
+
+    def do_finalize(self, fragment):
+        XilinxPlatform.do_finalize(self, fragment)
+
+class BaseSoC(SoCSDRAM):
+    csr_peripherals = [
+        "ddrphy",
+#        "dna",
+        "xadc",
+        "cpu_or_bridge",
+    ]
+    csr_map_update(SoCSDRAM.csr_map, csr_peripherals)
+
+    def __init__(self, platform, **kwargs):
+        clk_freq = int(100e6)
+
+def main():
+    platform = Platform()
+    soc = BaseSoC(platform)
+    builder = Builder(soc, output_dir="build", csr_csv="test/csr.csv")
+    vns = builder.build()
+    soc.do_exit(vns)
+
+if __name__ == "__main__":
+    main()
+"""
+            m.write(program_template)
+        return
 
 # For the main command, parse args and hand it off to main()
 if __name__ == "__main__":
@@ -229,18 +355,11 @@ if __name__ == "__main__":
         description="Wrap Python code to enable quickstart",
         add_help=False)
     parser.add_argument(
-        "-h", "--help", "--lx-help", help="show this help message and exit", action="help"
+        "-h", "--help", help="show this help message and exit", action="help"
     )
     parser.add_argument(
-        "-v", "--lx-verbose", help="increase verboseness of make processes", action="store_true")
-    parser.add_argument(
-        "-p", "--lx-print-env", help="print environment variable listing for pycharm, vscode, or bash", action="store_true"
+        '-i', '--init', help='initialize a new project', action="store_true"
     )
-    parser.add_argument(
-        "-c", "--lx-check-deps", help="check build environment for dependencies such as compiler and fpga tools and then exit", action="store_true"
-    )
-    parser.add_argument('-e', '--exec', '--lx-exec', help="Command to run", required=True,
-                        nargs=argparse.REMAINDER)
     args = parser.parse_args()
 
     main(args)
@@ -293,4 +412,11 @@ elif "LXBUILDENV_REEXEC" not in os.environ:
     except:
         sys.exit(1)
 else:
-    pass
+    # Overwrite the deps directory.
+    # Because we're running with a predefined PYTHONPATH, you'd think that
+    # the DEPS_DIR would be first.
+    # Unfortunately, setuptools causes the sitewide packages to take precedence
+    # over the PYTHONPATH variable.
+    # Work around this bug by inserting paths into the first index.
+    for path in get_python_path(script_path, None):
+        sys.path.insert(0, path)
