@@ -23,3 +23,6 @@
 [submodule "deps/pyserial"]
 	path = deps/pyserial
 	url = https://github.com/pyserial/pyserial.git
+[submodule "deps/litepcie"]
+	path = deps/litepcie
+	url = https://github.com/enjoy-digital/litepcie.git
